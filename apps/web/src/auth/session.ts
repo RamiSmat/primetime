@@ -3,6 +3,31 @@ import { jwtVerify, SignJWT } from "jose";
 export const SESSION_COOKIE_NAME = "pt_session";
 export const OAUTH_STATE_COOKIE_NAME = "pt_oauth_state";
 
+/**
+ * `signin` is the ordinary "sign in with GitHub" flow. `provision-repo`
+ * round-trips through GitHub's OAuth authorize screen (which, for a GitHub
+ * App with "Request user authorization during installation" enabled, also
+ * handles installing the App if it isn't installed yet) to get a fresh user
+ * access token, used once in the callback to create the user's dedicated
+ * warmup repository — never persisted.
+ */
+export type OauthIntent = "signin" | "provision-repo";
+
+const INTENT_SEPARATOR = "~";
+
+export function encodeOauthState(intent: OauthIntent): string {
+  return `${randomToken()}${INTENT_SEPARATOR}${intent}`;
+}
+
+export function decodeOauthIntent(state: string): OauthIntent {
+  const [, intent] = state.split(INTENT_SEPARATOR);
+  return intent === "provision-repo" ? "provision-repo" : "signin";
+}
+
+function randomToken(): string {
+  return crypto.randomUUID();
+}
+
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30;
 
 /**
