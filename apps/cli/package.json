@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@primetime/providers": "0.1.0",
+    "@primetime/scheduler": "0.1.0",
     "@primetime/shared": "0.1.0"
   }
 }
