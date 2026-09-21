@@ -10,5 +10,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }
+  },
+  "dependencies": {
+    "@primetime/shared": "0.1.0"
   }
 }
