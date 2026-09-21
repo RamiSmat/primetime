@@ -85,6 +85,12 @@ jobs:
         if: always() && steps.restore.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.PRIMETIME_SECRETS_PAT }}
+          # This runner has no git checkout of the repo this workflow lives
+          # in (only of primetime/, above) — GH_REPO tells our CLI which
+          # repository's secret to update without needing one. Plain `gh
+          # repo view` does NOT honor GH_REPO itself; primetime's own
+          # resolveRepository() does, specifically for this case.
+          GH_REPO: ${{ github.repository }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
             echo "::warning::PRIMETIME_SECRETS_PAT is not set, so the refreshed Codex session could not be saved. Future runs may need to re-authenticate sooner than expected. Run 'primetime setup github-secrets-pat' locally to fix this." >&2
