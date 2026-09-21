@@ -2,7 +2,7 @@ import { AlertTriangle, Sparkles } from "lucide-react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { CodeBlock } from "@/components/code-block";
+import { OsCommandTabs } from "@/components/os-command-tabs";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,10 +15,14 @@ import { WARMUP_REPO_NAME } from "@/src/github/provision-repo";
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
 const INSTALL_APP_HREF = "/api/auth/login?intent=install-app";
 
-const SETUP_SCRIPT_RAW_URL =
+const SETUP_SCRIPT_SH_RAW_URL =
   "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.sh";
-const SETUP_SCRIPT_SOURCE_URL =
+const SETUP_SCRIPT_SH_SOURCE_URL =
   "https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.sh";
+const SETUP_SCRIPT_PS1_RAW_URL =
+  "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.ps1";
+const SETUP_SCRIPT_PS1_SOURCE_URL =
+  "https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.ps1";
 const WORKFLOW_TEMPLATE_SOURCE_URL =
   "https://github.com/RamiSmat/primetime/blob/main/templates/github-actions/codex-prime-hosted.yml";
 
@@ -30,8 +34,12 @@ const SETUP_SCRIPT_STEPS = [
   "Adds the scheduled workflow file to this repo",
 ];
 
-function setupCommand(repositoryFullName: string, primeTimeWebUrl: string): string {
-  return `curl -fsSL ${SETUP_SCRIPT_RAW_URL} | bash -s -- ${repositoryFullName} ${primeTimeWebUrl}`;
+function setupCommandUnix(repositoryFullName: string, primeTimeWebUrl: string): string {
+  return `curl -fsSL ${SETUP_SCRIPT_SH_RAW_URL} | bash -s -- ${repositoryFullName} ${primeTimeWebUrl}`;
+}
+
+function setupCommandWindows(repositoryFullName: string, primeTimeWebUrl: string): string {
+  return `&([scriptblock]::Create((irm ${SETUP_SCRIPT_PS1_RAW_URL}))) "${repositoryFullName}" "${primeTimeWebUrl}"`;
 }
 
 const ERROR_COPY: Record<string, { title: string; body: string }> = {
@@ -79,16 +87,16 @@ export default async function DashboardPage({
   const origin = host ? `${protocol}://${host}` : "https://your-deployment.example";
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-12">
       <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         Signed in as <span className="font-medium text-foreground">{user.login}</span>
       </p>
 
       {error ? (
-        <Card className="mt-6 border-amber-500/40">
+        <Card variant="warning" className="mt-6">
           <CardHeader className="flex-row items-start gap-3 space-y-0">
-            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-warning" />
             <div>
               <CardTitle>{error.title}</CardTitle>
               <CardDescription className="mt-1">{error.body}</CardDescription>
@@ -115,7 +123,9 @@ export default async function DashboardPage({
       {!warmupRepo ? (
         <Card className="mt-6">
           <CardHeader className="items-center text-center">
-            <Sparkles className="mx-auto h-6 w-6 text-muted-foreground" />
+            <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-ember/10 text-ember">
+              <Sparkles className="h-6 w-6" />
+            </span>
             <CardTitle className="mt-2">Create your AI warmup repository</CardTitle>
             <CardDescription className="max-w-sm">
               One click connects PrimeTime to a small private repository dedicated to warming
@@ -142,10 +152,27 @@ export default async function DashboardPage({
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <CardDescription>
-              Run this once on your own machine. It&apos;s a plain shell script — it announces
-              every step it takes, and it&apos;s safe to run again later.
+              Run this once on your own machine, for your platform below. It&apos;s a plain,
+              reviewable script — it announces every step it takes, and it&apos;s safe to run
+              again later.
             </CardDescription>
-            <CodeBlock code={setupCommand(warmupRepo, origin)} />
+            <OsCommandTabs
+              defaultOs="unix"
+              commands={[
+                {
+                  id: "unix",
+                  label: "macOS / Linux",
+                  code: setupCommandUnix(warmupRepo, origin),
+                  reviewHref: SETUP_SCRIPT_SH_SOURCE_URL,
+                },
+                {
+                  id: "windows",
+                  label: "Windows (PowerShell)",
+                  code: setupCommandWindows(warmupRepo, origin),
+                  reviewHref: SETUP_SCRIPT_PS1_SOURCE_URL,
+                },
+              ]}
+            />
 
             <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
               {SETUP_SCRIPT_STEPS.map((item) => (
@@ -160,24 +187,14 @@ export default async function DashboardPage({
 
             <Separator />
 
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <a
-                href={SETUP_SCRIPT_SOURCE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="underline-offset-4 hover:underline"
-              >
-                Review the script before running it
-              </a>
-              <a
-                href={WORKFLOW_TEMPLATE_SOURCE_URL}
-                target="_blank"
-                rel="noreferrer"
-                className="text-muted-foreground underline-offset-4 hover:underline"
-              >
-                See the workflow it adds
-              </a>
-            </div>
+            <a
+              href={WORKFLOW_TEMPLATE_SOURCE_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="w-fit text-sm text-muted-foreground underline-offset-4 hover:underline"
+            >
+              See the workflow it adds
+            </a>
           </CardContent>
         </Card>
       )}

@@ -30,11 +30,15 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-16">
-      <section className="flex flex-col gap-4">
+      <section className="relative flex flex-col gap-4">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-ember/15 blur-3xl"
+        />
         <Badge variant="muted" className="w-fit">
           Early-stage, open source
         </Badge>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+        <h1 className="font-display text-4xl font-medium tracking-tight sm:text-5xl">
           Keep your AI coding CLI warm before you sit down to code.
         </h1>
         <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
@@ -62,11 +66,12 @@ export default async function HomePage() {
         <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
           How it works
         </h2>
-        <div className="flex flex-col gap-3">
+        <div className="relative flex flex-col gap-3">
+          <div aria-hidden className="absolute left-[2.375rem] top-8 bottom-8 w-px bg-border" />
           {STEPS.map((step, index) => (
-            <Card key={step.title}>
+            <Card key={step.title} className="relative">
               <CardHeader className="flex-row items-start gap-4 space-y-0">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium">
+                <span className="relative z-10 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ember text-sm font-medium text-ember-foreground">
                   {index + 1}
                 </span>
                 <div className="flex flex-col gap-1.5">
@@ -82,7 +87,9 @@ export default async function HomePage() {
       <section className="mt-12 grid gap-4 sm:grid-cols-2">
         <Card>
           <CardHeader>
-            <ShieldCheck className="h-5 w-5 text-muted-foreground" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ember/10 text-ember">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
             <CardTitle className="mt-2">Your credentials never touch PrimeTime</CardTitle>
             <CardDescription>
               Provider sessions live only in your own GitHub Actions secrets. PrimeTime&apos;s
@@ -93,7 +100,9 @@ export default async function HomePage() {
         </Card>
         <Card>
           <CardHeader>
-            <Timer className="h-5 w-5 text-muted-foreground" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ember/10 text-ember">
+              <Timer className="h-5 w-5" />
+            </span>
             <CardTitle className="mt-2">Runs on your schedule</CardTitle>
             <CardDescription>
               A timezone- and DST-aware scheduler figures out exactly when your primer should
@@ -103,7 +112,7 @@ export default async function HomePage() {
         </Card>
       </section>
 
-      <section className="mt-12 flex items-center justify-between rounded-lg border border-border bg-muted px-6 py-4">
+      <section className="mt-12 flex items-center justify-between rounded-2xl border border-border bg-muted px-6 py-4">
         <p className="text-sm text-muted-foreground">
           Prefer a fully self-hosted setup with no backend in your trust chain at all?
         </p>

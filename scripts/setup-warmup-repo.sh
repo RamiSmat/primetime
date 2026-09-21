@@ -6,6 +6,9 @@
 # plain, readable shell script instead of a black box:
 #   https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.sh
 #
+# This is the macOS/Linux (bash) version. On Windows, use the PowerShell
+# twin instead: scripts/setup-warmup-repo.ps1 -- keep the two in sync.
+#
 # Usage:
 #   curl -fsSL <raw-url-to-this-file> | bash -s -- <owner>/<repo> <primetime-web-url>
 #

@@ -166,13 +166,16 @@ button that installs the App if needed and connects a small private
 `primetime-warmup` repository dedicated to this, in a single round trip
 through GitHub. GitHub's API refuses to create a repository for any kind of
 GitHub App token, so the backend only registers that repository's name;
-it hands you a single copy-paste command (with that repository's name and
-this deployment's own URL already filled in) that runs
-[`scripts/setup-warmup-repo.sh`](scripts/setup-warmup-repo.sh): a plain,
-readable shell script — reviewable before you run it — that checks
-prerequisites, logs you into `gh`/Codex only if you aren't already,
-creates the repository itself via `gh repo create` if it doesn't exist
-yet, transfers your Codex session to its secret, and adds the scheduled
+it hands you a copy-paste command for your platform (with that
+repository's name and this deployment's own URL already filled in),
+defaulting to a client-side-detected tab: macOS/Linux runs
+[`scripts/setup-warmup-repo.sh`](scripts/setup-warmup-repo.sh), Windows
+runs its PowerShell twin
+[`scripts/setup-warmup-repo.ps1`](scripts/setup-warmup-repo.ps1) — both are
+plain, readable scripts, reviewable before you run them, that check
+prerequisites, log you into `gh`/Codex only if you aren't already,
+create the repository itself via `gh repo create` if it doesn't exist
+yet, transfer your Codex session to its secret, and add the scheduled
 workflow file, announcing each step as it runs.
 `apps/web/.env.example` documents the environment variables a real
 deployment needs
