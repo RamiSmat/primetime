@@ -162,15 +162,18 @@ flow, "Sign in with GitHub" (the GitHub App's own user-to-server OAuth, used
 only to identify the signed-in user for the dashboard — never a provider
 credential), and a dashboard. The dashboard doesn't ask you to pick from
 your existing repositories — it has one "Create my warmup repository"
-button that installs the App (if needed) and creates a small private
+button that installs the App if needed and connects a small private
 `primetime-warmup` repository dedicated to this, in a single round trip
-through GitHub. It then hands you a single copy-paste command (with that
-repository's name and this deployment's own URL already filled in) that
-runs [`scripts/setup-warmup-repo.sh`](scripts/setup-warmup-repo.sh):
-a plain, readable shell script — reviewable before you run it — that
-checks prerequisites, logs you into `gh`/Codex only if you aren't already,
-transfers your Codex session to the repository's secret, and adds the
-scheduled workflow file, announcing each step as it runs.
+through GitHub. GitHub's API refuses to create a repository for any kind of
+GitHub App token, so the backend only registers that repository's name;
+it hands you a single copy-paste command (with that repository's name and
+this deployment's own URL already filled in) that runs
+[`scripts/setup-warmup-repo.sh`](scripts/setup-warmup-repo.sh): a plain,
+readable shell script — reviewable before you run it — that checks
+prerequisites, logs you into `gh`/Codex only if you aren't already,
+creates the repository itself via `gh repo create` if it doesn't exist
+yet, transfers your Codex session to its secret, and adds the scheduled
+workflow file, announcing each step as it runs.
 `apps/web/.env.example` documents the environment variables a real
 deployment needs
 (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,

@@ -25,6 +25,7 @@ const WORKFLOW_TEMPLATE_SOURCE_URL =
 const SETUP_SCRIPT_STEPS = [
   "Checks that git, node, gh, and codex are installed",
   "Logs you into gh / Codex, only if you aren't already",
+  "Creates this repository (via gh) if it doesn't exist yet",
   "Sends your local Codex session straight to this repo's secrets via gh (never through PrimeTime)",
   "Adds the scheduled workflow file to this repo",
 ];
@@ -43,8 +44,8 @@ const ERROR_COPY: Record<string, { title: string; body: string }> = {
     body: "Your installation is set to \"Only select repositories,\" but there's nothing to select yet since PrimeTime creates a brand-new one. Open the installation's settings on GitHub, switch access to \"All repositories,\" then try again.",
   },
   provision_failed: {
-    title: "Couldn't create your warmup repository",
-    body: "Something went wrong talking to GitHub. Try again in a moment.",
+    title: "Couldn't connect your warmup repository",
+    body: "Something went wrong on PrimeTime's end recording the repository. Try again in a moment.",
   },
 };
 
@@ -61,7 +62,6 @@ export default async function DashboardPage({
   const params = await searchParams;
   const errorKey = typeof params["error"] === "string" ? params["error"] : undefined;
   const installationId = typeof params["installationId"] === "string" ? params["installationId"] : undefined;
-  const detail = typeof params["detail"] === "string" ? params["detail"] : undefined;
   const error = errorKey ? ERROR_COPY[errorKey] : undefined;
 
   const store = getInstallationStore();
@@ -92,11 +92,6 @@ export default async function DashboardPage({
             <div>
               <CardTitle>{error.title}</CardTitle>
               <CardDescription className="mt-1">{error.body}</CardDescription>
-              {detail ? (
-                <p className="mt-2 rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
-                  {detail}
-                </p>
-              ) : null}
               {errorKey === "needs_all_repos" && installationId ? (
                 <a
                   href={`https://github.com/settings/installations/${installationId}`}
@@ -123,9 +118,10 @@ export default async function DashboardPage({
             <Sparkles className="mx-auto h-6 w-6 text-muted-foreground" />
             <CardTitle className="mt-2">Create your AI warmup repository</CardTitle>
             <CardDescription className="max-w-sm">
-              One click creates a small private repository dedicated to warming up your AI
-              coding CLI. First time on this account? You&apos;ll be asked to install PrimeTime
-              first — after that, this button just works.
+              One click connects PrimeTime to a small private repository dedicated to warming
+              up your AI coding CLI (the setup script creates it locally). First time on this
+              account? You&apos;ll be asked to install PrimeTime first — after that, this button
+              just works.
             </CardDescription>
             <a href={CREATE_REPO_HREF} className={cn(buttonVariants(), "mt-4")}>
               <Sparkles className="h-4 w-4" />
@@ -133,7 +129,8 @@ export default async function DashboardPage({
             </a>
             <p className="mt-3 max-w-sm text-xs text-muted-foreground">
               If prompted to install, choose &ldquo;All repositories&rdquo; access — that&apos;s
-              what lets PrimeTime create the new repo for you automatically.
+              what lets the repository the setup script creates be covered by PrimeTime
+              automatically.
             </p>
           </CardHeader>
         </Card>

@@ -6,106 +6,48 @@ export class RepositorySelectionNotAllError extends Error {
   public constructor(public readonly installationId: number) {
     super(
       "The GitHub App installation only covers selected repositories; it must cover all " +
-        "repositories so PrimeTime can create and use a new one.",
+        "repositories so PrimeTime can register and use a new one.",
     );
     this.name = "RepositorySelectionNotAllError";
   }
 }
 
-/**
- * Wraps a failed GitHub API call with enough detail (HTTP status + GitHub's
- * own error message) to show the user something more actionable than
- * "something went wrong" — none of this is a credential, so it's safe to
- * surface directly.
- */
-export class RepoCreationFailedError extends Error {
-  public constructor(
-    public readonly status: number,
-    public readonly detail: string,
-  ) {
-    super(`GitHub repository creation failed (${status}): ${detail}`);
-    this.name = "RepoCreationFailedError";
-  }
-}
-
-interface CreatedRepository {
+interface WarmupRepository {
   readonly fullName: string;
 }
 
 /**
- * Creates (or, if it already exists, reuses) a single dedicated private
- * repository for this user — the "private PrimeTime repo" the project's
- * architecture is built around — and records it as connected. Requires the
- * user's own GitHub App user access token (never persisted beyond this
- * request) and only works when the installation covers "all repositories",
- * since GitHub's "add a repository to an installation" endpoint is
- * restricted to classic PATs and PrimeTime deliberately never asks users
- * for one.
+ * Registers the user's dedicated warmup repository as connected — the
+ * "private PrimeTime repo" the project's architecture is built around.
+ *
+ * This does *not* create the repository on GitHub: `POST /user/repos`
+ * rejects every kind of GitHub App token (user-to-server included) with
+ * `403 Resource not accessible by integration`, confirmed against the
+ * real deployment — GitHub reserves account-level repo creation for
+ * classic PATs and OAuth Apps, which this project deliberately never asks
+ * users for. Instead, `scripts/setup-warmup-repo.sh` creates it locally
+ * via `gh repo create`, using the user's own full-scope `gh` login. This
+ * function only records the deterministic `<login>/primetime-warmup` name
+ * in the DB (so the later GitHub Actions OIDC token exchange in
+ * `token-handler.ts` recognizes the repository) and requires the
+ * installation to cover "all repositories" so that once the script
+ * creates it, the App's installation actually does cover it — the same
+ * requirement as before, just no longer paired with an API call that
+ * can't succeed.
  */
 export async function provisionWarmupRepo(options: {
-  readonly accessToken: string;
-  readonly installation: { readonly installationId: number; readonly repositorySelection: "all" | "selected" };
+  readonly installation: {
+    readonly installationId: number;
+    readonly accountLogin: string;
+    readonly repositorySelection: "all" | "selected";
+  };
   readonly store: InstallationStore;
-}): Promise<CreatedRepository> {
+}): Promise<WarmupRepository> {
   if (options.installation.repositorySelection !== "all") {
     throw new RepositorySelectionNotAllError(options.installation.installationId);
   }
 
-  const fullName = await createOrReuseRepository(options.accessToken);
+  const fullName = `${options.installation.accountLogin}/${WARMUP_REPO_NAME}`;
   await options.store.addRepositories(options.installation.installationId, [fullName]);
   return { fullName };
-}
-
-async function createOrReuseRepository(accessToken: string): Promise<string> {
-  const headers = {
-    authorization: `Bearer ${accessToken}`,
-    accept: "application/vnd.github+json",
-    "content-type": "application/json",
-    "user-agent": "primetime-web",
-  };
-
-  const createResponse = await fetch("https://api.github.com/user/repos", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      name: WARMUP_REPO_NAME,
-      private: true,
-      description: "Created by PrimeTime — holds the scheduled workflow that warms up your AI coding CLI.",
-      auto_init: true,
-    }),
-  });
-
-  if (createResponse.ok) {
-    const body = (await createResponse.json()) as { full_name?: unknown };
-    if (typeof body.full_name === "string") {
-      return body.full_name;
-    }
-    throw new Error("GitHub did not return the new repository's name.");
-  }
-
-  // 422 means a repository with this name already exists for the user —
-  // most likely from an earlier attempt. Reuse it instead of failing.
-  if (createResponse.status === 422) {
-    const existing = await fetch("https://api.github.com/user", { headers });
-    if (!existing.ok) {
-      throw new Error("Could not resolve the existing warmup repository owner.");
-    }
-    const user = (await existing.json()) as { login?: unknown };
-    if (typeof user.login !== "string") {
-      throw new Error("Could not resolve the existing warmup repository owner.");
-    }
-    return `${user.login}/${WARMUP_REPO_NAME}`;
-  }
-
-  const rawBody = await createResponse.text();
-  let detail = rawBody;
-  try {
-    const parsed = JSON.parse(rawBody) as { message?: unknown };
-    if (typeof parsed.message === "string" && parsed.message !== "") {
-      detail = parsed.message;
-    }
-  } catch {
-    // Not JSON — fall back to the raw body text as-is.
-  }
-  throw new RepoCreationFailedError(createResponse.status, detail);
 }
