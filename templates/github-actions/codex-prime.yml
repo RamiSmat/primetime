@@ -1,0 +1,93 @@
+name: PrimeTime Codex primer
+
+# Copy this file into .github/workflows/ in your own PrimeTime-controlled
+# repository. Before it will work you must, from a local checkout of THIS
+# repository (not the one this workflow lives in):
+#
+#   1. `codex login` (ChatGPT, an access token, or workload identity — never
+#      an API key), then run `primetime setup codex` to transfer that
+#      session to this repo's CODEX_AUTH_JSON secret.
+#   2. Create a fine-grained GitHub PAT scoped to *only* this repository,
+#      with "Secrets: Read and write" permission and nothing else, then run
+#      `echo "$YOUR_PAT" | primetime setup github-secrets-pat` to store it
+#      as PRIMETIME_SECRETS_PAT. GitHub gives no API to mint a PAT
+#      programmatically, so this one step can't be automated further.
+#
+# See this repo's README ("GitHub Actions credential setup") for why both
+# secrets are needed and the constraints this workflow has to respect —
+# most importantly: never use this on a public repository, and never skip
+# the write-back step (it's what keeps the Codex session alive).
+#
+# PrimeTime is not yet published as an installable package, so this
+# workflow checks out and builds its source directly; replace the
+# "Install PrimeTime" step with a plain package install once it is.
+
+on:
+  schedule:
+    # Placeholder cadence — replace with your own computed schedule (see
+    # `primetime schedule next`) once a schedule-generation step exists.
+    - cron: "30 13 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: primetime-codex-primer
+  cancel-in-progress: false
+
+jobs:
+  prime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out PrimeTime
+        uses: actions/checkout@v4
+        with:
+          repository: RamiSmat/primetime
+          ref: main
+          path: primetime
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install PrimeTime
+        working-directory: primetime
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the official Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Restore the Codex session
+        id: restore
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          if [ -z "$CODEX_AUTH_JSON" ]; then
+            echo "::error::CODEX_AUTH_JSON is not set. Run 'primetime setup codex' locally first." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
+          chmod 600 "$HOME/.codex/auth.json"
+
+      - name: Run the Codex primer
+        run: node primetime/apps/cli/dist/src/bin.js prime codex
+
+      - name: Persist the refreshed Codex session
+        # Runs even if the primer step above failed, so a refresh that
+        # happened before the failure is not lost — but only if the
+        # session was actually restored in the first place.
+        if: always() && steps.restore.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.PRIMETIME_SECRETS_PAT }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::PRIMETIME_SECRETS_PAT is not set, so the refreshed Codex session could not be saved. Future runs may need to re-authenticate sooner than expected. Run 'primetime setup github-secrets-pat' locally to fix this." >&2
+            exit 0
+          fi
+          node primetime/apps/cli/dist/src/bin.js setup codex
