@@ -4,6 +4,7 @@ export interface ProviderDetectionResult {
 
 export interface ProviderSetupResult {
   readonly configured: boolean;
+  readonly message: string;
 }
 
 export interface AuthValidationResult {
