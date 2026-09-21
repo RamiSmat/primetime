@@ -111,6 +111,59 @@ full copy-in instructions, and
 [`templates/github-actions/README.md`](templates/github-actions/README.md)
 for an overview.
 
+#### Hosted setup (GitHub App)
+
+The PAT step above is the one piece of the CLI-only flow that can't be
+automated further — GitHub gives no API to mint a PAT programmatically, so
+creating one is always a manual, hand-in-the-UI step. `packages/github-app`
+and `apps/web` add a second, optional path that removes it, without
+changing what PrimeTime's backend is allowed to touch: **it never receives,
+stores, or logs a Codex/Claude/other provider session**, exactly as
+`AGENTS.md` requires. Only GitHub-scoped, short-lived tokens ever pass
+through it.
+
+The mechanism has two parts:
+
+1. **A GitHub App**, once installed on a user's repository, lets a backend
+   mint short-lived (max 1 hour), narrowly-scoped installation access
+   tokens on demand — no PAT, ever. `packages/github-app#mintInstallationToken`
+   requests one scoped to exactly one repository and exactly the
+   permissions needed (`{ secrets: "write" }`), even though the App's
+   overall installed grant may be broader.
+2. **GitHub Actions OIDC**: a workflow run can request a signed token from
+   GitHub proving "I am run X of workflow Y in repository Z"
+   (`$ACTIONS_ID_TOKEN_REQUEST_URL`, standard to every GitHub-hosted
+   runner). `packages/github-app#verifyActionsOidcToken` verifies that
+   token's signature against GitHub's own published JWKS
+   (`https://token.actions.githubusercontent.com/.well-known/jwks`) and
+   returns its claims. `apps/web`'s `/api/actions/token` route uses the
+   verified `repository` claim to look up that repository's installation
+   (tracked in Postgres from GitHub App webhook deliveries, via
+   `apps/web/src/db/store.ts`) and, only if one exists, hands back an
+   installation token scoped to just that repository. A repository with no
+   matching installation gets nothing back — that lookup is the entire
+   enforcement boundary.
+
+The Codex session never enters this exchange at any point: the runner
+already has it (restored from `CODEX_AUTH_JSON`, as above) before it asks
+for a write-back token, and the token this exchange returns can only manage
+that one repository's secrets, nothing else.
+
+[`templates/github-actions/codex-prime-hosted.yml`](templates/github-actions/codex-prime-hosted.yml)
+is the corresponding workflow template: identical to `codex-prime.yml`
+except its write-back step performs the OIDC exchange instead of using
+`PRIMETIME_SECRETS_PAT`, so only `CODEX_AUTH_JSON` is needed as a secret.
+This is strictly additive — `codex-prime.yml` is unchanged and remains the
+zero-backend, fully self-hostable path for anyone who doesn't want a hosted
+backend in their trust chain at all.
+
+This is currently backend code only: no GitHub App has been registered yet,
+and nothing is deployed. `apps/web/.env.example` documents the environment
+variables a real deployment needs (`GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_APP_WEBHOOK_SECRET`, `DATABASE_URL`,
+`OIDC_AUDIENCE`) — names only, matching this project's rule against
+committing real credential values.
+
 ### Scheduler
 
 `@primetime/scheduler` computes when a primer should run from a user's
@@ -163,4 +216,14 @@ After building, the current CLI can be exercised with:
 
 ```sh
 node apps/cli/dist/src/bin.js prime codex
+```
+
+`apps/web` (the hosted backend, see "Hosted setup (GitHub App)" above) is a
+Next.js app that isn't part of the `tsc -b`/`node --test` graph above — it
+does its own type-checking and bundling, and needs `packages/github-app` and
+`packages/shared` built first (via `npm run build` above):
+
+```sh
+npm run build -w apps/web    # next build
+npx tsx --test apps/web/test/webhook-handler.test.ts apps/web/test/token-handler.test.ts
 ```
