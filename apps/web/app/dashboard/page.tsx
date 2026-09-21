@@ -13,6 +13,7 @@ import { getInstallationStore } from "@/src/db/store";
 import { WARMUP_REPO_NAME } from "@/src/github/provision-repo";
 
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
+const INSTALL_APP_HREF = "/api/auth/login?intent=install-app";
 
 const SETUP_SCRIPT_RAW_URL =
   "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.sh";
@@ -34,8 +35,8 @@ function setupCommand(repositoryFullName: string, primeTimeWebUrl: string): stri
 
 const ERROR_COPY: Record<string, { title: string; body: string }> = {
   not_installed: {
-    title: "Installation didn't complete",
-    body: "GitHub didn't report an installation of PrimeTime for your account. Try again, and make sure to finish the install step.",
+    title: "PrimeTime isn't installed on your account yet",
+    body: "Install it on GitHub first — that's a one-time step per account — then come back and create your warmup repository.",
   },
   needs_all_repos: {
     title: "PrimeTime needs access to all repositories",
@@ -106,6 +107,11 @@ export default async function DashboardPage({
                   Open installation settings
                 </a>
               ) : null}
+              {errorKey === "not_installed" ? (
+                <a href={INSTALL_APP_HREF} className={cn(buttonVariants({ size: "sm" }), "mt-3")}>
+                  Install PrimeTime on GitHub
+                </a>
+              ) : null}
             </div>
           </CardHeader>
         </Card>
@@ -118,14 +124,15 @@ export default async function DashboardPage({
             <CardTitle className="mt-2">Create your AI warmup repository</CardTitle>
             <CardDescription className="max-w-sm">
               One click creates a small private repository dedicated to warming up your AI
-              coding CLI — install PrimeTime and create it in one step.
+              coding CLI. First time on this account? You&apos;ll be asked to install PrimeTime
+              first — after that, this button just works.
             </CardDescription>
             <a href={CREATE_REPO_HREF} className={cn(buttonVariants(), "mt-4")}>
               <Sparkles className="h-4 w-4" />
               Create my warmup repository
             </a>
             <p className="mt-3 max-w-sm text-xs text-muted-foreground">
-              If prompted during install, choose &ldquo;All repositories&rdquo; access — that&apos;s
+              If prompted to install, choose &ldquo;All repositories&rdquo; access — that&apos;s
               what lets PrimeTime create the new repo for you automatically.
             </p>
           </CardHeader>

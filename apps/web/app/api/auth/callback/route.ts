@@ -62,7 +62,7 @@ export async function GET(request: Request): Promise<Response> {
     });
 
     const dashboardUrl = new URL("/dashboard", url.origin);
-    if (intent === "provision-repo") {
+    if (intent === "provision-repo" || intent === "install-app") {
       await runProvisioning(accessToken, dashboardUrl);
     }
 

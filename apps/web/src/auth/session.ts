@@ -4,14 +4,23 @@ export const SESSION_COOKIE_NAME = "pt_session";
 export const OAUTH_STATE_COOKIE_NAME = "pt_oauth_state";
 
 /**
- * `signin` is the ordinary "sign in with GitHub" flow. `provision-repo`
- * round-trips through GitHub's OAuth authorize screen (which, for a GitHub
- * App with "Request user authorization during installation" enabled, also
- * handles installing the App if it isn't installed yet) to get a fresh user
- * access token, used once in the callback to create the user's dedicated
- * warmup repository — never persisted.
+ * `signin` is the ordinary "sign in with GitHub" flow.
+ *
+ * `provision-repo` and `install-app` both end up running the same
+ * provisioning logic in the callback, but start from different GitHub
+ * URLs: visiting `/apps/<slug>/installations/new` only walks the user
+ * through GitHub's OAuth authorize screen too (the step that actually
+ * hands the callback a `code`) when the App *isn't already installed* for
+ * that account — installing is a one-time event. For an account that
+ * already has the App installed, that same URL just takes them to GitHub's
+ * "manage installation" settings page and never returns to PrimeTime at
+ * all (confirmed against the real deployment). So `provision-repo` (the
+ * dashboard's default "Create my warmup repository" button) uses the
+ * plain authorize URL, which works reliably regardless of install state;
+ * `install-app` (shown only once the callback reports no installation
+ * exists yet) uses the install URL, for that one first-time case.
  */
-export type OauthIntent = "signin" | "provision-repo";
+export type OauthIntent = "signin" | "provision-repo" | "install-app";
 
 const INTENT_SEPARATOR = "~";
 
@@ -21,7 +30,7 @@ export function encodeOauthState(intent: OauthIntent): string {
 
 export function decodeOauthIntent(state: string): OauthIntent {
   const [, intent] = state.split(INTENT_SEPARATOR);
-  return intent === "provision-repo" ? "provision-repo" : "signin";
+  return intent === "provision-repo" || intent === "install-app" ? intent : "signin";
 }
 
 function randomToken(): string {
