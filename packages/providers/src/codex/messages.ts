@@ -26,3 +26,15 @@ const API_KEY_AUTH_MESSAGE =
 export function authFailureMessage(category: CodexAuthCategory): string {
   return category === "api_key" ? API_KEY_AUTH_MESSAGE : CODEX_FAILURE_MESSAGES.authentication_required;
 }
+
+export const CODEX_SETUP_MESSAGES = {
+  success:
+    "Codex session transferred to the repository's CODEX_AUTH_JSON GitHub Actions secret.",
+  authFileUnavailable:
+    "Could not read the local Codex auth file. Run `codex login` locally first.",
+  repositoryNotResolved:
+    "Could not determine the target GitHub repository. Run this from inside a git checkout with a GitHub remote, and make sure `gh auth status` succeeds.",
+  secretWriteFailed:
+    "Could not write the GitHub Actions secret. Ensure `gh auth status` succeeds and that you have permission to manage this repository's secrets.",
+  ghCliUnavailable: "The GitHub CLI (gh) was not found. Install it and run `gh auth login` first.",
+} as const;

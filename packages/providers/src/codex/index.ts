@@ -1,3 +1,4 @@
+import { defaultGhRunner, resolveRepository, setRepositorySecret, type GhRunner } from "@primetime/github";
 import { PrimeTimeError } from "@primetime/shared";
 
 import type {
@@ -9,6 +10,7 @@ import type {
   ProviderSetupResult,
 } from "../adapter.js";
 
+import { readLocalCodexAuthFile } from "./auth-file.js";
 import {
   classifyExecFailure,
   classifyLoginStatus,
@@ -28,9 +30,12 @@ import {
 import {
   authFailureMessage,
   CODEX_FAILURE_MESSAGES,
+  CODEX_SETUP_MESSAGES,
   CODEX_SUCCESS_MESSAGE,
 } from "./messages.js";
 import { withEphemeralWorkspace } from "./workspace.js";
+
+const CODEX_AUTH_SECRET_NAME = "CODEX_AUTH_JSON";
 
 export class ProviderOperationNotImplementedError extends PrimeTimeError {
   public constructor(providerName: string, operation: ProviderOperation) {
@@ -53,6 +58,7 @@ export class CodexProvider implements ProviderAdapter {
 
   public constructor(
     private readonly runner: SubprocessRunner = defaultSubprocessRunner,
+    private readonly ghRunner: GhRunner = defaultGhRunner,
   ) {}
 
   public async detect(): Promise<ProviderDetectionResult> {
@@ -69,8 +75,47 @@ export class CodexProvider implements ProviderAdapter {
     };
   }
 
+  /**
+   * Transfers the local Codex CLI session directly to the target GitHub
+   * repository's `CODEX_AUTH_JSON` Actions secret, via `gh secret set` (see
+   * `@primetime/github`) — the auth file's bytes never pass through
+   * anything but this machine and GitHub's own API. This does not
+   * authenticate Codex itself; run `codex login` locally first.
+   */
   public async setup(): Promise<ProviderSetupResult> {
-    throw new ProviderOperationNotImplementedError(this.name, "setup");
+    const authCategory = await this.detectAuthCategory();
+    if (!isAcceptedNonApiAuth(authCategory)) {
+      return { configured: false, message: authFailureMessage(authCategory) };
+    }
+
+    let authFileContents: string;
+    try {
+      authFileContents = await readLocalCodexAuthFile();
+    } catch {
+      return { configured: false, message: CODEX_SETUP_MESSAGES.authFileUnavailable };
+    }
+
+    let repository;
+    try {
+      repository = await resolveRepository(this.ghRunner);
+    } catch {
+      return { configured: false, message: CODEX_SETUP_MESSAGES.repositoryNotResolved };
+    }
+
+    try {
+      await setRepositorySecret(
+        { name: CODEX_AUTH_SECRET_NAME, value: authFileContents, repository },
+        this.ghRunner,
+      );
+    } catch (error: unknown) {
+      const message =
+        error instanceof PrimeTimeError && error.kind === "cli_unavailable"
+          ? CODEX_SETUP_MESSAGES.ghCliUnavailable
+          : CODEX_SETUP_MESSAGES.secretWriteFailed;
+      return { configured: false, message };
+    }
+
+    return { configured: true, message: CODEX_SETUP_MESSAGES.success };
   }
 
   public async validateAuthentication(): Promise<AuthValidationResult> {
