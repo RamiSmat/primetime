@@ -61,6 +61,10 @@ export async function mintInstallationToken(
   fetchImpl: FetchLike = fetch,
 ): Promise<InstallationToken> {
   const appJwt = await signAppJwt({ appId: options.appId, privateKey: options.privateKey });
+  // GitHub's `repositories` field on this endpoint takes bare repo names,
+  // not `owner/name` — unlike almost every other GitHub API. Strip the
+  // owner prefix from our own `owner/name`-shaped option before sending.
+  const repositoryName = options.repository.split("/").at(-1) ?? options.repository;
 
   let response: Awaited<ReturnType<FetchLike>>;
   try {
@@ -75,7 +79,7 @@ export async function mintInstallationToken(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          repositories: [options.repository],
+          repositories: [repositoryName],
           permissions: options.permissions,
         }),
         signal: AbortSignal.timeout(INSTALLATION_TOKEN_TIMEOUT_MS),

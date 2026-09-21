@@ -36,8 +36,29 @@ test("requests a token scoped to exactly the given repository and permissions", 
     repositories: string[];
     permissions: Record<string, string>;
   };
-  assert.deepEqual(body.repositories, ["RamiSmat/primetime"]);
+  assert.deepEqual(body.repositories, ["primetime"]);
   assert.deepEqual(body.permissions, { secrets: "write" });
+});
+
+test("scopes to the bare repository name even when the owner itself contains a slash-like segment", async () => {
+  const fetch = new FakeFetch(() =>
+    fakeFetchResponse({ body: { token: "ghs_fixture_token", expires_at: "2026-01-01T00:00:00Z" } }),
+  );
+
+  await mintInstallationToken(
+    {
+      appId: "123456",
+      privateKey: fixture.privateKeyPem,
+      installationId: 987,
+      repository: "RamiSmat/primetimetest",
+      permissions: { secrets: "write" },
+    },
+    fetch.fetch,
+  );
+
+  const call = fetch.calls[0]!;
+  const body = JSON.parse(call.init?.body ?? "{}") as { repositories: string[] };
+  assert.deepEqual(body.repositories, ["primetimetest"]);
 });
 
 test("throws InstallationTokenRequestFailedError on a non-2xx response, without leaking the private key", async () => {
