@@ -1,0 +1,13 @@
+{
+  "name": "primetime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "primetime": "./dist/src/bin.js"
+  },
+  "dependencies": {
+    "@primetime/providers": "0.1.0",
+    "@primetime/shared": "0.1.0"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@primetime/root",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Schedule lightweight primer requests for AI coding tools.",
+  "license": "ISC",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "tsc -b --clean",
+    "typecheck": "tsc -b --pretty false",
+    "test": "npm run build && node --test apps/cli/dist/test/arguments.test.js apps/cli/dist/test/providers.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3"
+  }
+}
