@@ -157,12 +157,18 @@ This is strictly additive — `codex-prime.yml` is unchanged and remains the
 zero-backend, fully self-hostable path for anyone who doesn't want a hosted
 backend in their trust chain at all.
 
-This is currently backend code only: no GitHub App has been registered yet,
-and nothing is deployed. `apps/web/.env.example` documents the environment
-variables a real deployment needs (`GITHUB_APP_ID`,
-`GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_APP_WEBHOOK_SECRET`, `DATABASE_URL`,
-`OIDC_AUDIENCE`) — names only, matching this project's rule against
-committing real credential values.
+`apps/web` also serves the web UI itself: a landing page explaining the
+flow, "Sign in with GitHub" (the GitHub App's own user-to-server OAuth, used
+only to identify the signed-in user for the dashboard — never a provider
+credential), and a dashboard that lists your connected repositories with
+the exact copy-paste commands and a ready-to-paste
+`codex-prime-hosted.yml` (with your deployment's own URL already filled in)
+needed to finish setup for each one. `apps/web/.env.example` documents the
+environment variables a real deployment needs (`GITHUB_APP_ID`,
+`GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_APP_WEBHOOK_SECRET`,
+`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_SLUG`,
+`SESSION_SECRET`, `DATABASE_URL`, `OIDC_AUDIENCE`) — names only, matching
+this project's rule against committing real credential values.
 
 ### Scheduler
 

@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { Nav } from "@/components/nav";
+
+import "./globals.css";
+
 export const metadata: Metadata = {
   title: "PrimeTime",
   description: "Schedule lightweight primer requests for AI coding tool CLIs.",
@@ -9,7 +13,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body className="min-h-screen font-sans antialiased">
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }

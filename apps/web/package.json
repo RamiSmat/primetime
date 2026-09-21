@@ -14,16 +14,23 @@
     "@neondatabase/serverless": "^1.1.0",
     "@primetime/github-app": "0.1.0",
     "@primetime/shared": "0.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.3",
+    "jose": "^5.9.6",
+    "lucide-react": "^0.545.0",
     "next": "^16.3.5",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint": "^10.11.0",
     "eslint-config-next": "^16.3.5",
+    "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3"
   }
