@@ -1,29 +1,31 @@
 name: PrimeTime Codex primer (hosted)
 
-# Copy this file into .github/workflows/ in your own PrimeTime-controlled
-# repository. This is the OIDC/GitHub-App variant of codex-prime.yml: it
-# trusts a hosted PrimeTime backend to mint the token that writes the
-# refreshed Codex session back to this repo's secret, instead of a
-# hand-created PRIMETIME_SECRETS_PAT. It never trusts that backend with the
-# Codex session itself — CODEX_AUTH_JSON still moves directly between this
-# runner and this repository's own secrets, exactly as in codex-prime.yml.
+# This is the OIDC/GitHub-App variant of codex-prime.yml: it trusts a
+# hosted PrimeTime backend to mint the token that writes the refreshed
+# Codex session back to this repo's secret, instead of a hand-created
+# PRIMETIME_SECRETS_PAT. It never trusts that backend with the Codex
+# session itself — CODEX_AUTH_JSON still moves directly between this runner
+# and this repository's own secrets, exactly as in codex-prime.yml.
+#
+# The PrimeTime dashboard's "Create my warmup repository" flow adds this
+# file for you (with PRIMETIME_WEB_URL/OIDC_AUDIENCE already filled in) via
+# scripts/setup-warmup-repo.sh — that's the recommended path. To do it by
+# hand instead:
+#
+#   1. Install the PrimeTime GitHub App on this repository (with access to
+#      "All repositories").
+#   2. `codex login` locally (ChatGPT, an access token, or workload
+#      identity — never an API key), then from a local checkout of the
+#      PrimeTime repository run `GH_REPO=<owner>/<repo> node
+#      apps/cli/dist/src/bin.js setup codex` to transfer that session to
+#      this repo's CODEX_AUTH_JSON secret.
+#   3. Copy this file into .github/workflows/ in that repository, and
+#      replace PRIMETIME_WEB_URL and OIDC_AUDIENCE below with your actual
+#      deployed PrimeTime backend's URL.
 #
 # If you'd rather not have a hosted backend in your trust chain at all, use
 # codex-prime.yml instead — it needs no GitHub App and no external backend,
 # only the PrimeTime CLI and `gh`.
-#
-# Before this will work:
-#
-#   1. Install the PrimeTime GitHub App (see the root README's "Hosted
-#      setup (GitHub App)" section) on this repository.
-#   2. From a local checkout of the PrimeTime CLI's repository, `codex
-#      login` (ChatGPT, an access token, or workload identity — never an API
-#      key), then run `primetime setup codex` to transfer that session to
-#      this repo's CODEX_AUTH_JSON secret. That's the only manual step left
-#      — no PAT to hand-create.
-#   3. Replace PRIMETIME_WEB_URL and OIDC_AUDIENCE below with the values for
-#      the actual deployed PrimeTime backend you installed the App from.
-#      PRIMETIME_WEB_URL is a placeholder until something is deployed.
 #
 # PrimeTime is not yet published as an installable package, so this
 # workflow checks out and builds its source directly; replace the

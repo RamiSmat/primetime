@@ -164,10 +164,15 @@ credential), and a dashboard. The dashboard doesn't ask you to pick from
 your existing repositories — it has one "Create my warmup repository"
 button that installs the App (if needed) and creates a small private
 `primetime-warmup` repository dedicated to this, in a single round trip
-through GitHub, then shows the exact copy-paste commands and a
-ready-to-paste `codex-prime-hosted.yml` (with your deployment's own URL
-already filled in) for that one repository. `apps/web/.env.example`
-documents the environment variables a real deployment needs
+through GitHub. It then hands you a single copy-paste command (with that
+repository's name and this deployment's own URL already filled in) that
+runs [`scripts/setup-warmup-repo.sh`](scripts/setup-warmup-repo.sh):
+a plain, readable shell script — reviewable before you run it — that
+checks prerequisites, logs you into `gh`/Codex only if you aren't already,
+transfers your Codex session to the repository's secret, and adds the
+scheduled workflow file, announcing each step as it runs.
+`apps/web/.env.example` documents the environment variables a real
+deployment needs
 (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
 `GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`,
 `GITHUB_APP_CLIENT_SECRET`, `SESSION_SECRET`, `DATABASE_URL`,
