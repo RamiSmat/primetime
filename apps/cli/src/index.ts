@@ -1,7 +1,9 @@
 import { selectProvider } from "@primetime/providers";
+import { computeNextPrimerRun } from "@primetime/scheduler";
 import { PrimeTimeError } from "@primetime/shared";
 
 import { parseCliArguments } from "./arguments.js";
+import { readScheduleConfigFile } from "./schedule.js";
 
 export interface CliIo {
   writeOutput(message: string): void;
@@ -14,15 +16,23 @@ export async function runCli(
 ): Promise<number> {
   try {
     const command = parseCliArguments(args);
-    const provider = selectProvider(command.provider);
-    const result = await provider.prime();
 
-    if (!result.success) {
-      io.writeError(`${provider.name} primer did not complete successfully.`);
-      return 1;
+    if (command.command === "prime") {
+      const provider = selectProvider(command.provider);
+      const result = await provider.prime();
+
+      if (!result.success) {
+        io.writeError(`${provider.name} primer did not complete successfully.`);
+        return 1;
+      }
+
+      io.writeOutput(`${provider.name} primer completed successfully.`);
+      return 0;
     }
 
-    io.writeOutput(`${provider.name} primer completed successfully.`);
+    const config = await readScheduleConfigFile(command.configPath);
+    const nextRun = computeNextPrimerRun(config, new Date());
+    io.writeOutput(`Next primer run: ${nextRun.toISOString()}`);
     return 0;
   } catch (error: unknown) {
     if (error instanceof PrimeTimeError) {
@@ -37,3 +47,4 @@ export async function runCli(
 
 export { CliUsageError, parseCliArguments } from "./arguments.js";
 export { selectProvider } from "@primetime/providers";
+export { ScheduleConfigFileError, readScheduleConfigFile } from "./schedule.js";
