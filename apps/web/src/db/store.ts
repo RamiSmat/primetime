@@ -27,6 +27,7 @@ export interface InstallationStore {
   findInstallationForRepository(
     repositoryFullName: string,
   ): Promise<InstallationRecord | undefined>;
+  listRepositoriesForAccount(accountLogin: string): Promise<readonly string[]>;
 }
 
 /** Drizzle-backed implementation for production, over Neon's serverless HTTP driver. */
@@ -122,6 +123,19 @@ export class DrizzleInstallationStore implements InstallationStore {
 
     return rows[0];
   }
+
+  public async listRepositoriesForAccount(accountLogin: string): Promise<readonly string[]> {
+    const rows = await this.db
+      .select({ repositoryFullName: installationRepositories.repositoryFullName })
+      .from(installationRepositories)
+      .innerJoin(
+        githubInstallations,
+        eq(installationRepositories.installationId, githubInstallations.installationId),
+      )
+      .where(eq(githubInstallations.accountLogin, accountLogin));
+
+    return rows.map((row) => row.repositoryFullName);
+  }
 }
 
 /** Plain in-memory fake for tests — route-handler tests never need a real Postgres connection. */
@@ -178,6 +192,20 @@ export class InMemoryInstallationStore implements InstallationStore {
       }
     }
     return undefined;
+  }
+
+  public async listRepositoriesForAccount(accountLogin: string): Promise<readonly string[]> {
+    const repositoryFullNames: string[] = [];
+    for (const [installationId, installation] of this.installations) {
+      if (installation.accountLogin !== accountLogin) {
+        continue;
+      }
+      const repositories = this.repositories.get(installationId);
+      if (repositories) {
+        repositoryFullNames.push(...repositories);
+      }
+    }
+    return repositoryFullNames;
   }
 }
 
