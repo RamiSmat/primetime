@@ -19,7 +19,7 @@ test("rejects unsupported command shapes", () => {
     () => parseCliArguments(["prime", "codex", "extra"]),
     CliUsageError,
   );
-  assert.throws(() => parseCliArguments(["setup", "codex"]), CliUsageError);
+  assert.throws(() => parseCliArguments(["nonsense"]), CliUsageError);
 });
 
 test("parses the schedule next command and config path", () => {
@@ -43,6 +43,34 @@ test("rejects an unsupported schedule subcommand", () => {
 test("rejects a schedule next command with extra arguments", () => {
   assert.throws(
     () => parseCliArguments(["schedule", "next", "./schedule.json", "extra"]),
+    CliUsageError,
+  );
+});
+
+test("parses the setup provider command", () => {
+  assert.deepEqual(parseCliArguments(["setup", "codex"]), {
+    command: "setup-provider",
+    provider: "codex",
+  });
+});
+
+test("rejects a setup command missing a provider", () => {
+  assert.throws(() => parseCliArguments(["setup"]), CliUsageError);
+});
+
+test("rejects a setup provider command with extra arguments", () => {
+  assert.throws(() => parseCliArguments(["setup", "codex", "extra"]), CliUsageError);
+});
+
+test("parses the setup github-secrets-pat command", () => {
+  assert.deepEqual(parseCliArguments(["setup", "github-secrets-pat"]), {
+    command: "setup-github-secrets-pat",
+  });
+});
+
+test("rejects a setup github-secrets-pat command with extra arguments", () => {
+  assert.throws(
+    () => parseCliArguments(["setup", "github-secrets-pat", "extra"]),
     CliUsageError,
   );
 });

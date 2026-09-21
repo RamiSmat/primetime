@@ -12,7 +12,7 @@
     "build": "tsc -b",
     "clean": "tsc -b --clean",
     "typecheck": "tsc -b --pretty false",
-    "test": "npm run build && node --test apps/cli/dist/test/arguments.test.js apps/cli/dist/test/providers.test.js apps/cli/dist/test/schedule.test.js apps/cli/dist/test/run-cli.test.js packages/providers/dist/test/classification.test.js packages/providers/dist/test/environment.test.js packages/providers/dist/test/command.test.js packages/providers/dist/test/codex-provider.test.js packages/providers/dist/test/codex-setup.test.js packages/scheduler/dist/test/timezone.test.js packages/scheduler/dist/test/config.test.js packages/scheduler/dist/test/schedule.test.js packages/github/dist/test/repository.test.js packages/github/dist/test/secrets.test.js"
+    "test": "npm run build && node --test apps/cli/dist/test/arguments.test.js apps/cli/dist/test/providers.test.js apps/cli/dist/test/schedule.test.js apps/cli/dist/test/run-cli.test.js apps/cli/dist/test/github-secrets-pat.test.js packages/providers/dist/test/classification.test.js packages/providers/dist/test/environment.test.js packages/providers/dist/test/command.test.js packages/providers/dist/test/codex-provider.test.js packages/providers/dist/test/codex-setup.test.js packages/scheduler/dist/test/timezone.test.js packages/scheduler/dist/test/config.test.js packages/scheduler/dist/test/schedule.test.js packages/github/dist/test/repository.test.js packages/github/dist/test/secrets.test.js"
   },
   "devDependencies": {
     "@types/node": "^24.10.0",

@@ -14,7 +14,7 @@ const VALID_CONFIG = {
   activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
 };
 
-function fakeIo(): CliIo & { output: string[]; errors: string[] } {
+function fakeIo(input = ""): CliIo & { output: string[]; errors: string[] } {
   const output: string[] = [];
   const errors: string[] = [];
   return {
@@ -22,6 +22,7 @@ function fakeIo(): CliIo & { output: string[]; errors: string[] } {
     errors,
     writeOutput: (message: string) => output.push(message),
     writeError: (message: string) => errors.push(message),
+    readInput: () => Promise.resolve(input),
   };
 }
 
@@ -62,6 +63,15 @@ test("schedule next reports a clear error and exit code 1 for a missing config f
   assert.equal(io.output.length, 0);
   assert.equal(io.errors.length, 1);
   assert.match(io.errors[0]!, /could not be read/);
+});
+
+test("setup github-secrets-pat reports a clear error for empty stdin, without calling gh", async () => {
+  const io = fakeIo("   \n");
+  const exitCode = await runCli(["setup", "github-secrets-pat"], io);
+
+  assert.equal(exitCode, 1);
+  assert.equal(io.output.length, 0);
+  assert.deepEqual(io.errors, ["No PAT value was provided on stdin."]);
 });
 
 test("schedule next reports a clear error for an invalid schedule", async () => {
