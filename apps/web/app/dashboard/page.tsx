@@ -10,18 +10,25 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getCurrentUser } from "@/src/auth/current-user";
 import { getInstallationStore } from "@/src/db/store";
-import { buildHostedWorkflowYaml } from "@/src/github/hosted-workflow-template";
 
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
 
-const CLONE_AND_LOGIN = `git clone https://github.com/RamiSmat/primetime.git
-cd primetime
-npm install && npm run build
-gh auth login
-codex login`;
+const SETUP_SCRIPT_RAW_URL =
+  "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.sh";
+const SETUP_SCRIPT_SOURCE_URL =
+  "https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.sh";
+const WORKFLOW_TEMPLATE_SOURCE_URL =
+  "https://github.com/RamiSmat/primetime/blob/main/templates/github-actions/codex-prime-hosted.yml";
 
-function pushSecretCommand(repositoryFullName: string): string {
-  return `GH_REPO=${repositoryFullName} node apps/cli/dist/src/bin.js setup codex`;
+const SETUP_SCRIPT_STEPS = [
+  "Checks that git, node, gh, and codex are installed",
+  "Logs you into gh / Codex, only if you aren't already",
+  "Sends your local Codex session straight to this repo's secrets via gh (never through PrimeTime)",
+  "Adds the scheduled workflow file to this repo",
+];
+
+function setupCommand(repositoryFullName: string, primeTimeWebUrl: string): string {
+  return `curl -fsSL ${SETUP_SCRIPT_RAW_URL} | bash -s -- ${repositoryFullName} ${primeTimeWebUrl}`;
 }
 
 const ERROR_COPY: Record<string, { title: string; body: string }> = {
@@ -117,32 +124,43 @@ export default async function DashboardPage({
             <CardTitle className="font-mono text-sm">{warmupRepo}</CardTitle>
             <Badge variant="success">Ready</Badge>
           </CardHeader>
-          <CardContent className="flex flex-col gap-5">
+          <CardContent className="flex flex-col gap-4">
             <CardDescription>
-              Finish setup locally, once — this hands your Codex session directly to this
-              repository&apos;s GitHub secrets. PrimeTime never sees it.
+              Run this once on your own machine. It&apos;s a plain shell script — it announces
+              every step it takes, and it&apos;s safe to run again later.
             </CardDescription>
+            <CodeBlock code={setupCommand(warmupRepo, origin)} />
+
+            <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
+              {SETUP_SCRIPT_STEPS.map((item) => (
+                <li key={item} className="flex gap-2">
+                  <span aria-hidden className="text-foreground">
+                    ·
+                  </span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+
             <Separator />
 
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">1. Clone PrimeTime and sign in</p>
-              <CodeBlock code={CLONE_AND_LOGIN} />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">2. Send your Codex session to the repo</p>
-              <CodeBlock code={pushSecretCommand(warmupRepo)} />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">
-                3. Save as <code>.github/workflows/primetime-codex-primer.yml</code> in{" "}
-                {warmupRepo}, then commit and push
-              </p>
-              <CodeBlock
-                code={buildHostedWorkflowYaml(origin)}
-                className="max-h-72 overflow-y-auto"
-              />
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              <a
+                href={SETUP_SCRIPT_SOURCE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="underline-offset-4 hover:underline"
+              >
+                Review the script before running it
+              </a>
+              <a
+                href={WORKFLOW_TEMPLATE_SOURCE_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="text-muted-foreground underline-offset-4 hover:underline"
+              >
+                See the workflow it adds
+              </a>
             </div>
           </CardContent>
         </Card>
