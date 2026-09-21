@@ -13,13 +13,17 @@
 #   1. Checks that git, node, npm, gh, and codex are all on your PATH.
 #   2. Makes sure you're logged into `gh` and Codex, prompting you to log in
 #      (in your terminal / browser) only if you aren't already.
-#   3. Clones and builds PrimeTime into a throwaway temp directory that is
+#   3. Creates <repo> (as private) via `gh repo create`, if it doesn't
+#      already exist. PrimeTime's backend never creates repositories
+#      itself — GitHub rejects that from any kind of GitHub App token, by
+#      design — so this always runs as your own full `gh` login.
+#   4. Clones and builds PrimeTime into a throwaway temp directory that is
 #      deleted when this script exits — PrimeTime isn't published as an
 #      installable package yet, so this is how the CLI is run for now.
-#   4. Sends your local Codex session to <repo>'s CODEX_AUTH_JSON secret.
+#   5. Sends your local Codex session to <repo>'s CODEX_AUTH_JSON secret.
 #      `gh` encrypts it and sends it directly to GitHub's API — this script
 #      and PrimeTime's own backend never see the session itself.
-#   5. Adds or updates .github/workflows/primetime-codex-primer.yml in
+#   6. Adds or updates .github/workflows/primetime-codex-primer.yml in
 #      <repo> via the GitHub API — no local clone of <repo> needed.
 #
 # Safe to re-run at any time.
@@ -56,6 +60,16 @@ if codex login status 2>&1 | grep -qi "not logged in"; then
   codex login < /dev/tty
 else
   echo "  Already logged in (the next step will tell you if it's not a usable login method)."
+fi
+
+step "Ensuring $REPO exists"
+if gh repo view "$REPO" >/dev/null 2>&1; then
+  echo "  Already exists."
+else
+  echo "  Creating it as a new private repository."
+  gh repo create "$REPO" --private \
+    --description "Created by PrimeTime — holds the scheduled workflow that warms up your AI coding CLI." \
+    >/dev/null
 fi
 
 WORKDIR="$(mktemp -d)"
