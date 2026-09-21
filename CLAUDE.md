@@ -14,7 +14,7 @@ User → PrimeTime web UI → GitHub account / private PrimeTime repo → GitHub
 
 Provider credentials must always live in infrastructure the user controls (e.g. GitHub Actions secrets). **PrimeTime's backend must never receive, store, or log provider authentication material** (passwords, cookies, session tokens, API keys). This is an architectural constraint, not a style preference — see `AGENTS.md` for the full list of security invariants before touching anything related to auth, credential storage, or GitHub Actions workflow generation.
 
-Currently implemented: a `primetime prime <provider>` CLI skeleton, the `ProviderAdapter` contract, and a placeholder Codex adapter that intentionally throws "not implemented" (it does not read, transmit, or change credentials). Scheduling, the web UI, GitHub integration, and real provider auth are not yet built.
+Currently implemented: a `primetime prime <provider>` CLI skeleton (the Codex adapter itself still intentionally throws "not implemented" — it does not read, transmit, or change credentials), a `primetime schedule next <config-path>` command, and the `@primetime/scheduler` package it's built on (timezone/DST-aware computation of the next primer run from a work-start configuration). The web UI, GitHub integration, real provider auth, and wiring `schedule next` into an actual triggered `prime` run are not yet built.
 
 ## Commands
 
@@ -35,6 +35,7 @@ To exercise the CLI directly after building:
 
 ```sh
 node apps/cli/dist/src/bin.js prime codex
+node apps/cli/dist/src/bin.js schedule next ./schedule.json
 ```
 
 There is no lint script configured yet.
@@ -43,13 +44,13 @@ There is no lint script configured yet.
 
 This is an npm workspaces monorepo (`apps/*`, `packages/*`) built with TypeScript project references (`tsconfig.json` at the root references each package; each package has its own `tsconfig.json` extending `tsconfig.base.json`). `tsconfig.base.json` enables strict mode plus `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes` — keep new code compliant rather than relaxing these.
 
-- `apps/cli` — the `primetime` binary. `bin.ts` wires stdout/stderr into `index.ts#runCli`, which parses args (`arguments.ts`), resolves a provider via `@primetime/providers`, and reports success/failure without ever handling raw error internals for unknown errors.
+- `apps/cli` — the `primetime` binary. `bin.ts` wires stdout/stderr into `index.ts#runCli`, which parses args (`arguments.ts`) into a `prime` or `schedule-next` command. `prime` resolves a provider via `@primetime/providers`; `schedule-next` reads and validates a JSON config file (`schedule.ts#readScheduleConfigFile`, wrapping file/JSON errors in `ScheduleConfigFileError`) and prints the result of `@primetime/scheduler#computeNextPrimerRun`.
 - `packages/providers` — the `ProviderAdapter` interface (`adapter.ts`: `detect`/`setup`/`validateAuthentication`/`prime`) and the provider registry (`registry.ts`, a lookup map keyed by lowercased provider id). Each provider lives in its own subdirectory (e.g. `codex/`) and is added to the `providers` map in `registry.ts`. `UnknownProviderError` deliberately does not echo the invalid input back in its message (tested in `apps/cli/test/providers.test.ts`) — preserve that when editing.
-- `packages/scheduler` — placeholder; scheduling/timezone logic will land here.
+- `packages/scheduler` — computes the next primer run from a `ScheduleConfig` (timezone, work-start time, lead time, active weekdays). `timezone.ts` does all local-time/UTC/DST conversion using only the native `Intl` API (no date library dependency); `config.ts#parseScheduleConfig` validates untrusted input; `schedule.ts#computeNextPrimerRun` walks forward day-by-day to find the next active weekday's primer instant strictly after `now`. Not yet wired into the CLI to trigger `prime`, and not yet used by GitHub Actions.
 - `packages/shared` — cross-package primitives, currently just `PrimeTimeError`, a typed error base class keyed by `FailureKind` (`authentication_expired`, `provider_unavailable`, `rate_limited`, `cli_unavailable`, `invalid_configuration`, `network_failure`, `not_implemented`, `unknown_failure`). New error types across the codebase should extend this and pick the closest `FailureKind` rather than inventing ad hoc error shapes.
 - `templates/github-actions` — will hold generated workflow templates once provider priming is implemented; workflows must use only user-controlled secrets and never embed credentials.
 
-Package import boundaries: `apps/cli` depends on `@primetime/providers` and `@primetime/shared`; `@primetime/providers` depends on `@primetime/shared`. Keep provider-specific logic out of `shared` and out of the CLI layer — new provider behavior belongs in its own subdirectory under `packages/providers/src/`.
+Package import boundaries: `apps/cli` depends on `@primetime/providers`, `@primetime/scheduler`, and `@primetime/shared`; `@primetime/providers` and `@primetime/scheduler` each depend on `@primetime/shared`. Keep provider-specific logic out of `shared` and out of the CLI layer — new provider behavior belongs in its own subdirectory under `packages/providers/src/`.
 
 ## Working conventions specific to this repo
 

@@ -8,7 +8,8 @@ infrastructure and must never pass through a PrimeTime backend.
 
 This repository currently contains a minimal TypeScript monorepo with:
 
-- a `primetime prime <provider>` CLI skeleton;
+- a `primetime prime <provider>` and `primetime schedule next <config-path>`
+  CLI skeleton;
 - a provider adapter contract and placeholder Codex adapter;
 - a scheduler package that computes primer run times from a work-start
   configuration (see below), plus placeholder shared code; and
@@ -44,8 +45,19 @@ local wall-clock time to UTC, so it accounts for daylight-saving
 transitions correctly on either side of the change. `parseScheduleConfig`
 validates an untrusted input object and throws a descriptive
 `InvalidScheduleConfigError` for anything malformed, rather than silently
-falling back to a default. This package is not yet wired into the CLI or
-GitHub Actions templates.
+falling back to a default.
+
+The CLI exposes this through `primetime schedule next <config-path>`,
+which reads a JSON file in the shape above and prints the next primer run
+as an ISO instant:
+
+```sh
+node apps/cli/dist/src/bin.js schedule next ./schedule.json
+# Next primer run: 2024-01-16T13:30:00.000Z
+```
+
+It does not yet trigger `prime` itself on a schedule — that still requires
+the GitHub Actions integration, which is not yet built.
 
 ## Development
 
