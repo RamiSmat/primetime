@@ -35,9 +35,9 @@ test("does not echo an unknown provider value in errors", () => {
   );
 });
 
-test("Codex priming reports that it is not implemented", async () => {
+test("Codex setup reports that it is not implemented", async () => {
   await assert.rejects(
-    selectProvider("codex").prime(),
+    selectProvider("codex").setup(),
     ProviderOperationNotImplementedError,
   );
 });
