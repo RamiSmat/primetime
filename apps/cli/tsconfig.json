@@ -10,6 +10,7 @@
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "references": [
     { "path": "../../packages/shared" },
-    { "path": "../../packages/providers" }
+    { "path": "../../packages/providers" },
+    { "path": "../../packages/scheduler" }
   ]
 }
