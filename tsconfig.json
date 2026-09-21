@@ -2,6 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared" },
+    { "path": "./packages/github" },
     { "path": "./packages/providers" },
     { "path": "./packages/scheduler" },
     { "path": "./apps/cli" }
