@@ -22,11 +22,11 @@ export async function runCli(
       const result = await provider.prime();
 
       if (!result.success) {
-        io.writeError(`${provider.name} primer did not complete successfully.`);
+        io.writeError(result.message);
         return 1;
       }
 
-      io.writeOutput(`${provider.name} primer completed successfully.`);
+      io.writeOutput(result.message);
       return 0;
     }
 
