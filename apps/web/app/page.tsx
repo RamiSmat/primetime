@@ -9,8 +9,8 @@ import { getCurrentUser } from "@/src/auth/current-user";
 
 const STEPS = [
   {
-    title: "Sign in and connect a repository",
-    body: "Sign in with GitHub, then install the PrimeTime GitHub App on the repository you want warmed up. PrimeTime never asks for your GitHub password — only the standard GitHub install flow.",
+    title: "Sign in and create your warmup repository",
+    body: "Sign in with GitHub, then click one button. PrimeTime installs itself and creates a small, private repository dedicated to warming up your AI coding CLI — no picking through your existing projects.",
   },
   {
     title: "Hand off your provider session once, locally",

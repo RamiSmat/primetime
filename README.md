@@ -160,15 +160,30 @@ backend in their trust chain at all.
 `apps/web` also serves the web UI itself: a landing page explaining the
 flow, "Sign in with GitHub" (the GitHub App's own user-to-server OAuth, used
 only to identify the signed-in user for the dashboard — never a provider
-credential), and a dashboard that lists your connected repositories with
-the exact copy-paste commands and a ready-to-paste
-`codex-prime-hosted.yml` (with your deployment's own URL already filled in)
-needed to finish setup for each one. `apps/web/.env.example` documents the
-environment variables a real deployment needs (`GITHUB_APP_ID`,
-`GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_APP_WEBHOOK_SECRET`,
-`GITHUB_APP_CLIENT_ID`, `GITHUB_APP_CLIENT_SECRET`, `GITHUB_APP_SLUG`,
-`SESSION_SECRET`, `DATABASE_URL`, `OIDC_AUDIENCE`) — names only, matching
-this project's rule against committing real credential values.
+credential), and a dashboard. The dashboard doesn't ask you to pick from
+your existing repositories — it has one "Create my warmup repository"
+button that installs the App (if needed) and creates a small private
+`primetime-warmup` repository dedicated to this, in a single round trip
+through GitHub, then shows the exact copy-paste commands and a
+ready-to-paste `codex-prime-hosted.yml` (with your deployment's own URL
+already filled in) for that one repository. `apps/web/.env.example`
+documents the environment variables a real deployment needs
+(`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
+`GITHUB_APP_WEBHOOK_SECRET`, `GITHUB_APP_CLIENT_ID`,
+`GITHUB_APP_CLIENT_SECRET`, `SESSION_SECRET`, `DATABASE_URL`,
+`OIDC_AUDIENCE`) — names only, matching this project's rule against
+committing real credential values.
+
+The GitHub App must have **"Request user authorization (OAuth) during
+installation"** enabled (so the same authorize screen both installs the App
+for a first-time user and hands the backend a user access token) and a
+matching **Callback URL** pointed at `<deployment-url>/api/auth/callback`.
+Creating the warmup repository also requires the installation to cover
+**"All repositories"** — GitHub's API for adding a single repository to an
+existing installation only accepts a classic PAT, which this project
+deliberately never asks users to create, so the dashboard surfaces an
+actionable error rather than silently failing if a user picks "Only select
+repositories" instead.
 
 ### Scheduler
 
