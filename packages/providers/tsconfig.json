@@ -4,9 +4,9 @@
     "composite": true,
     "declaration": true,
     "declarationMap": true,
-    "rootDir": "src",
+    "rootDir": ".",
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts"],
   "references": [{ "path": "../shared" }]
 }

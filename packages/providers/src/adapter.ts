@@ -10,8 +10,19 @@ export interface AuthValidationResult {
   readonly authenticated: boolean;
 }
 
+export type PrimeErrorCategory =
+  | "cli_unavailable"
+  | "authentication_required"
+  | "timeout"
+  | "rate_limited"
+  | "unknown_failure";
+
 export interface PrimeResult {
   readonly success: boolean;
+  readonly provider: string;
+  readonly durationMs: number;
+  readonly errorCategory: PrimeErrorCategory | null;
+  readonly message: string;
 }
 
 export interface ProviderAdapter {
