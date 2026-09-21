@@ -24,7 +24,7 @@ export async function Nav() {
           {user ? (
             <>
               <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
-                Dashboard
+                Setup
               </Link>
               <form action="/api/auth/logout" method="post">
                 <Button type="submit" variant="outline" size="sm">
