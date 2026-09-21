@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getCurrentUser } from "@/src/auth/current-user";
 import { getInstallationStore } from "@/src/db/store";
+import { WARMUP_REPO_NAME } from "@/src/github/provision-repo";
 
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
 
@@ -59,11 +60,17 @@ export default async function DashboardPage({
   const params = await searchParams;
   const errorKey = typeof params["error"] === "string" ? params["error"] : undefined;
   const installationId = typeof params["installationId"] === "string" ? params["installationId"] : undefined;
+  const detail = typeof params["detail"] === "string" ? params["detail"] : undefined;
   const error = errorKey ? ERROR_COPY[errorKey] : undefined;
 
   const store = getInstallationStore();
   const repositories = await store.listRepositoriesForAccount(user.login);
-  const warmupRepo = repositories[0];
+  // With "All repositories" access, the installation (and so this list)
+  // covers every repo the account has — not just the one PrimeTime
+  // created — so pick out the dedicated warmup repo by name rather than
+  // grabbing an arbitrary entry.
+  const warmupRepoSuffix = `/${WARMUP_REPO_NAME}`.toLowerCase();
+  const warmupRepo = repositories.find((repo) => repo.toLowerCase().endsWith(warmupRepoSuffix));
 
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
@@ -84,6 +91,11 @@ export default async function DashboardPage({
             <div>
               <CardTitle>{error.title}</CardTitle>
               <CardDescription className="mt-1">{error.body}</CardDescription>
+              {detail ? (
+                <p className="mt-2 rounded-md bg-muted px-2 py-1 font-mono text-xs text-muted-foreground">
+                  {detail}
+                </p>
+              ) : null}
               {errorKey === "needs_all_repos" && installationId ? (
                 <a
                   href={`https://github.com/settings/installations/${installationId}`}

@@ -11,7 +11,11 @@ import {
 } from "@/src/auth/session";
 import { getInstallationStore } from "@/src/db/store";
 import { findUserAppInstallation } from "@/src/github/user-installations";
-import { provisionWarmupRepo, RepositorySelectionNotAllError } from "@/src/github/provision-repo";
+import {
+  provisionWarmupRepo,
+  RepoCreationFailedError,
+  RepositorySelectionNotAllError,
+} from "@/src/github/provision-repo";
 
 export async function GET(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -98,6 +102,9 @@ async function runProvisioning(accessToken: string, dashboardUrl: URL): Promise<
     if (error instanceof RepositorySelectionNotAllError) {
       dashboardUrl.searchParams.set("error", "needs_all_repos");
       dashboardUrl.searchParams.set("installationId", String(error.installationId));
+    } else if (error instanceof RepoCreationFailedError) {
+      dashboardUrl.searchParams.set("error", "provision_failed");
+      dashboardUrl.searchParams.set("detail", `HTTP ${error.status}: ${error.detail}`.slice(0, 300));
     } else {
       dashboardUrl.searchParams.set("error", "provision_failed");
     }
