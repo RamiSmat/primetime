@@ -1,0 +1,27 @@
+---
+title: Development
+description: Building and testing this repository locally.
+---
+
+```sh
+npm install
+npm run typecheck
+npm test
+```
+
+After building, the current CLI can be exercised with:
+
+```sh
+node apps/cli/dist/src/bin.js prime codex
+```
+
+`apps/web` (the hosted backend, see
+[GitHub Actions setup](/docs/github-actions-setup)) is a Next.js app that
+isn't part of the `tsc -b`/`node --test` graph above -- it does its own
+type-checking and bundling, and needs `packages/github-app` and
+`packages/shared` built first (via `npm run build` above):
+
+```sh
+npm run build -w apps/web    # next build
+npx tsx --test apps/web/test/webhook-handler.test.ts apps/web/test/token-handler.test.ts
+```

@@ -15,17 +15,12 @@ export async function Nav() {
             aria-hidden
             className="h-2 w-2 rounded-full bg-ember shadow-[0_0_12px_2px_rgba(255,90,31,0.55)]"
           />
-          <span className="font-display text-base font-medium tracking-tight">PrimeTime</span>
+          <span className="text-base font-semibold tracking-tight">PrimeTime</span>
         </Link>
         <nav className="flex items-center gap-4 text-sm">
-          <a
-            href="https://github.com/RamiSmat/primetime"
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground"
-          >
+          <Link href="/docs" className="text-muted-foreground hover:text-foreground">
             Docs
-          </a>
+          </Link>
           {user ? (
             <>
               <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">

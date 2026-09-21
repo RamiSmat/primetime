@@ -1,0 +1,130 @@
+---
+title: GitHub Actions setup
+description: Two ways to run the Codex primer on a schedule -- a self-hosted PAT flow and the hosted GitHub App flow.
+---
+
+`primetime prime codex` reads `codex login status`; it does not authenticate
+Codex itself. Once you're logged in locally with a supported non-API method,
+`CodexProvider.setup()` transfers that session to a GitHub Actions secret so
+a scheduled workflow can run it unattended.
+
+## Self-hosted: PAT write-back
+
+1. Run `codex login` locally (browser/ChatGPT sign-in, an access token, or
+   workload identity -- never an API key).
+2. From inside a checkout of your PrimeTime-controlled GitHub repository,
+   run `primetime setup codex`. It reads your local `$CODEX_HOME/auth.json`
+   (defaults to `~/.codex/auth.json`) and pipes it directly to
+   [`gh secret set CODEX_AUTH_JSON`](https://cli.github.com/manual/gh_secret_set),
+   scoped to that repository. `gh` performs GitHub's required sealed-box
+   encryption locally -- PrimeTime implements no cryptography of its own,
+   and the file's bytes go **directly from your machine to GitHub's API**,
+   never through a PrimeTime backend. This requires the GitHub CLI (`gh`)
+   to be installed and already authenticated (`gh auth login`).
+3. Create a fine-grained GitHub PAT scoped to *only* that repository, with
+   "Secrets: Read and write" permission and nothing else -- GitHub gives no
+   API to mint a PAT programmatically, so this step has to be done by hand
+   in the GitHub UI. Then run
+   `echo "$YOUR_PAT" | primetime setup github-secrets-pat` to store it as
+   the `PRIMETIME_SECRETS_PAT` secret (read from stdin, never as a CLI
+   argument, so it can't leak through process listings). The scheduled
+   workflow needs this to write the refreshed Codex session back after
+   each run, since GitHub's default `GITHUB_TOKEN` cannot manage
+   repository secrets.
+
+This is based on OpenAI's own documented pattern for maintaining a
+ChatGPT-session `auth.json` in CI/CD (see
+[Authentication](https://developers.openai.com/codex/auth) and
+[Maintaining Codex account auth in CI/CD](https://developers.openai.com/codex/auth/ci-cd-auth)),
+which comes with real constraints a GitHub Actions workflow built on this
+must respect:
+
+- **Treat `auth.json` as a password.** Never commit it, log it, or use this
+  pattern for a public/open-source repository.
+- **The workflow must persist the file it gets back**, not just the one it
+  started with. Codex automatically refreshes the session in place during a
+  run; overwriting a runner's `auth.json` from the original secret on every
+  run (instead of writing the refreshed copy back) destroys that refresh
+  and eventually breaks the session.
+- **One `auth.json` per runner / serialized workflow.** Don't share it
+  across concurrent jobs.
+- Codex refreshes the session automatically if it's been about 8 days
+  since the last refresh -- a daily or weekly scheduled primer keeps it
+  alive indefinitely on its own. If the underlying credential is ever
+  actually revoked, refreshing fails and re-running `setup()` (after
+  `codex login` again locally) is required.
+
+`templates/github-actions/codex-prime.yml` is the actual scheduled
+workflow: it restores `auth.json` from `CODEX_AUTH_JSON`, runs the primer,
+and -- using `PRIMETIME_SECRETS_PAT` -- persists the refreshed session by
+running `primetime setup codex` again, this time from inside the runner.
+See that file's header comment for the full copy-in instructions.
+
+## Hosted setup (GitHub App)
+
+The PAT step above is the one piece of the CLI-only flow that can't be
+automated further -- GitHub gives no API to mint a PAT programmatically, so
+creating one is always a manual, hand-in-the-UI step. The GitHub App and
+hosted backend add a second, optional path that removes it, without
+changing what PrimeTime's backend is allowed to touch: **it never receives,
+stores, or logs a Codex/Claude/other provider session**. Only
+GitHub-scoped, short-lived tokens ever pass through it.
+
+The mechanism has two parts:
+
+1. **A GitHub App**, once installed on a user's repository, lets a backend
+   mint short-lived (max 1 hour), narrowly-scoped installation access
+   tokens on demand -- no PAT, ever. The token is scoped to exactly one
+   repository and exactly the permissions needed (`{ secrets: "write" }`),
+   even though the App's overall installed grant may be broader.
+2. **GitHub Actions OIDC**: a workflow run can request a signed token from
+   GitHub proving "I am run X of workflow Y in repository Z"
+   (`$ACTIONS_ID_TOKEN_REQUEST_URL`, standard to every GitHub-hosted
+   runner). PrimeTime's backend verifies that token's signature against
+   GitHub's own published JWKS, looks up that repository's installation,
+   and -- only if one exists -- hands back an installation token scoped to
+   just that repository. A repository with no matching installation gets
+   nothing back -- that lookup is the entire enforcement boundary.
+
+The Codex session never enters this exchange at any point: the runner
+already has it (restored from `CODEX_AUTH_JSON`, as above) before it asks
+for a write-back token, and the token this exchange returns can only
+manage that one repository's secrets, nothing else.
+
+`templates/github-actions/codex-prime-hosted.yml` is the corresponding
+workflow template: identical to `codex-prime.yml` except its write-back
+step performs the OIDC exchange instead of using `PRIMETIME_SECRETS_PAT`,
+so only `CODEX_AUTH_JSON` is needed as a secret. This is strictly
+additive -- `codex-prime.yml` is unchanged and remains the zero-backend,
+fully self-hostable path for anyone who doesn't want a hosted backend in
+their trust chain at all.
+
+### The dashboard flow
+
+The hosted web app also serves the dashboard itself: sign in with GitHub,
+then click one button to create a small private `primetime-warmup`
+repository dedicated to this. GitHub's API refuses to create a repository
+for any kind of GitHub App token, so the backend only registers that
+repository's name; it hands you a copy-paste command for your platform
+(with that repository's name and your deployment's own URL already filled
+in), defaulting to a client-side-detected tab:
+
+- **macOS / Linux** runs `scripts/setup-warmup-repo.sh`.
+- **Windows** runs its PowerShell twin `scripts/setup-warmup-repo.ps1`.
+
+Both are plain, readable scripts, reviewable before you run them, that
+check prerequisites, log you into `gh`/Codex only if you aren't already,
+create the repository itself via `gh repo create` if it doesn't exist yet,
+transfer your Codex session to its secret, and add the scheduled workflow
+file, announcing each step as it runs.
+
+The GitHub App must have **"Request user authorization (OAuth) during
+installation"** enabled (so the same authorize screen both installs the
+App for a first-time user and hands the backend a user access token) and a
+matching **Callback URL** pointed at `<deployment-url>/api/auth/callback`.
+Creating the warmup repository also requires the installation to cover
+**"All repositories"** -- GitHub's API for adding a single repository to
+an existing installation only accepts a classic PAT, which this project
+deliberately never asks users to create, so the dashboard surfaces an
+actionable error rather than silently failing if a user picks "Only
+select repositories" instead.

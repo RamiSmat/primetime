@@ -1,9 +1,11 @@
 @import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+@source "../../../node_modules/fumadocs-ui/dist/**/*.js";
 
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  --font-display: var(--font-display-fraunces), ui-serif, Georgia, serif;
 
   --color-background: #faf8f4;
   --color-foreground: #1c1917;
@@ -28,6 +30,18 @@
   --radius-lg: 0.875rem;
   --radius-xl: 1.25rem;
   --radius-2xl: 1.75rem;
+
+  --color-fd-background: var(--color-background);
+  --color-fd-foreground: var(--color-foreground);
+  --color-fd-card: var(--color-card);
+  --color-fd-card-foreground: var(--color-card-foreground);
+  --color-fd-primary: var(--color-primary);
+  --color-fd-primary-foreground: var(--color-primary-foreground);
+  --color-fd-muted: var(--color-muted);
+  --color-fd-muted-foreground: var(--color-muted-foreground);
+  --color-fd-border: var(--color-border);
+  --color-fd-accent: var(--color-ember);
+  --color-fd-accent-foreground: var(--color-ember-foreground);
 }
 
 html {
