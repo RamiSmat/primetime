@@ -38,7 +38,7 @@ export default async function HomePage() {
         <Badge variant="muted" className="w-fit">
           Early-stage, open source
         </Badge>
-        <h1 className="font-display text-4xl font-medium tracking-tight sm:text-5xl">
+        <h1 className="text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
           Keep your AI coding CLI warm before you sit down to code.
         </h1>
         <p className="max-w-xl text-base leading-relaxed text-muted-foreground">
@@ -51,12 +51,7 @@ export default async function HomePage() {
             <Github className="h-4 w-4" />
             {primaryCta.label}
           </a>
-          <a
-            href="https://github.com/RamiSmat/primetime#readme"
-            target="_blank"
-            rel="noreferrer"
-            className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
-          >
+          <a href="/docs" className={cn(buttonVariants({ variant: "outline", size: "lg" }))}>
             Read the docs
           </a>
         </div>

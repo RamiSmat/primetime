@@ -1,0 +1,43 @@
+---
+title: Scheduler
+description: How @primetime/scheduler computes the next primer run time.
+---
+
+`@primetime/scheduler` computes when a primer should run from a user's
+work schedule:
+
+```ts
+import { computeNextPrimerRun, parseScheduleConfig } from "@primetime/scheduler";
+
+const config = parseScheduleConfig({
+  timeZone: "America/New_York",
+  workStartTime: "09:00",
+  leadTimeMinutes: 30,
+  activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+});
+
+computeNextPrimerRun(config, new Date());
+```
+
+`computeNextPrimerRun` returns the next absolute instant, strictly after
+`now`, that is `leadTimeMinutes` before `workStartTime` local to
+`timeZone`, on the next date whose local weekday is in `activeWeekdays`.
+It uses the JavaScript `Intl` API (no date library dependency) to convert
+local wall-clock time to UTC, so it accounts for daylight-saving
+transitions correctly on either side of the change. `parseScheduleConfig`
+validates an untrusted input object and throws a descriptive
+`InvalidScheduleConfigError` for anything malformed, rather than silently
+falling back to a default.
+
+The CLI exposes this through `primetime schedule next <config-path>`,
+which reads a JSON file in the shape above and prints the next primer run
+as an ISO instant:
+
+```sh
+node apps/cli/dist/src/bin.js schedule next ./schedule.json
+# Next primer run: 2024-01-16T13:30:00.000Z
+```
+
+It does not yet trigger `prime` itself on a schedule -- that still
+requires the GitHub Actions integration described in
+[GitHub Actions setup](/docs/github-actions-setup).

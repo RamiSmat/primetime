@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import type { ReactNode } from "react";
-
-import { Nav } from "@/components/nav";
-import { fontDisplay } from "@/lib/fonts";
 
 import "./globals.css";
 
@@ -13,10 +11,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={fontDisplay.variable}>
+    <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen font-sans antialiased">
-        <Nav />
-        {children}
+        <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
       </body>
     </html>
   );

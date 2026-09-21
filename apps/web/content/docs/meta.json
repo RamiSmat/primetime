@@ -1,0 +1,4 @@
+{
+  "title": "Docs",
+  "pages": ["index", "codex-provider", "github-actions-setup", "scheduler", "development"]
+}

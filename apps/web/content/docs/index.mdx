@@ -1,0 +1,28 @@
+---
+title: Overview
+description: What PrimeTime is and what this repository currently contains.
+---
+
+PrimeTime is an early-stage utility for scheduling lightweight primer
+requests for AI coding tools. Provider credentials must remain on
+user-controlled infrastructure and must never pass through a PrimeTime
+backend.
+
+## Current scope
+
+This repository currently contains a minimal TypeScript monorepo with:
+
+- a `primetime prime <provider>`, `primetime schedule next <config-path>`,
+  `primetime setup <provider>`, and `primetime setup github-secrets-pat`
+  CLI;
+- a provider adapter contract, with a real Codex adapter (including a real
+  `setup()` that transfers your local Codex session to a GitHub Actions
+  secret) and a placeholder interface for future providers;
+- a scheduler package that computes primer run times from a work-start
+  configuration (see [Scheduler](/docs/scheduler)); and
+- a GitHub Actions workflow template that runs the Codex primer on a
+  schedule (see [GitHub Actions setup](/docs/github-actions-setup)).
+
+Read [Codex provider](/docs/codex-provider) next for what a primer request
+actually does, or jump to [Development](/docs/development) if you're
+setting up a local checkout.
