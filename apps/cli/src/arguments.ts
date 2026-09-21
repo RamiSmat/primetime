@@ -1,7 +1,10 @@
 import { PrimeTimeError } from "@primetime/shared";
 
 export const CLI_USAGE =
-  "Usage: primetime prime <provider>\n       primetime schedule next <config-path>";
+  "Usage: primetime prime <provider>\n" +
+  "       primetime schedule next <config-path>\n" +
+  "       primetime setup <provider>\n" +
+  "       primetime setup github-secrets-pat";
 
 export interface PrimeCommand {
   readonly command: "prime";
@@ -13,7 +16,20 @@ export interface ScheduleNextCommand {
   readonly configPath: string;
 }
 
-export type CliCommand = PrimeCommand | ScheduleNextCommand;
+export interface SetupProviderCommand {
+  readonly command: "setup-provider";
+  readonly provider: string;
+}
+
+export interface SetupGithubSecretsPatCommand {
+  readonly command: "setup-github-secrets-pat";
+}
+
+export type CliCommand =
+  | PrimeCommand
+  | ScheduleNextCommand
+  | SetupProviderCommand
+  | SetupGithubSecretsPatCommand;
 
 export class CliUsageError extends PrimeTimeError {
   public constructor() {
@@ -37,6 +53,20 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       throw new CliUsageError();
     }
     return { command: "schedule-next", configPath: third };
+  }
+
+  if (first === "setup") {
+    if (second === "github-secrets-pat") {
+      if (third !== undefined || extraArguments.length > 0) {
+        throw new CliUsageError();
+      }
+      return { command: "setup-github-secrets-pat" };
+    }
+
+    if (second === undefined || second.trim() === "" || third !== undefined || extraArguments.length > 0) {
+      throw new CliUsageError();
+    }
+    return { command: "setup-provider", provider: second };
   }
 
   throw new CliUsageError();
