@@ -8,14 +8,16 @@ infrastructure and must never pass through a PrimeTime backend.
 
 This repository currently contains a minimal TypeScript monorepo with:
 
-- a `primetime prime <provider>` and `primetime schedule next <config-path>`
+- a `primetime prime <provider>`, `primetime schedule next <config-path>`,
+  `primetime setup <provider>`, and `primetime setup github-secrets-pat`
   CLI;
 - a provider adapter contract, with a real Codex adapter (including a real
   `setup()` that transfers your local Codex session to a GitHub Actions
   secret) and a placeholder interface for future providers;
 - a scheduler package that computes primer run times from a work-start
   configuration (see below), plus placeholder shared code; and
-- a placeholder directory for future GitHub Actions templates.
+- a GitHub Actions workflow template that runs the Codex primer on a
+  schedule (see below).
 
 ### Codex provider
 
@@ -59,14 +61,24 @@ scheduled workflow can run it unattended:
 1. Run `codex login` locally (browser/ChatGPT sign-in, an access token, or
    workload identity — never an API key).
 2. From inside a checkout of your PrimeTime-controlled GitHub repository,
-   `setup()` reads your local `$CODEX_HOME/auth.json` (defaults to
-   `~/.codex/auth.json`) and pipes it directly to
+   run `primetime setup codex`. It reads your local `$CODEX_HOME/auth.json`
+   (defaults to `~/.codex/auth.json`) and pipes it directly to
    [`gh secret set CODEX_AUTH_JSON`](https://cli.github.com/manual/gh_secret_set),
    scoped to that repository. `gh` performs GitHub's required sealed-box
    encryption locally — PrimeTime implements no cryptography of its own, and
    the file's bytes go **directly from your machine to GitHub's API**, never
    through a PrimeTime backend. This requires the GitHub CLI (`gh`) to be
    installed and already authenticated (`gh auth login`).
+3. Create a fine-grained GitHub PAT scoped to *only* that repository, with
+   "Secrets: Read and write" permission and nothing else — GitHub gives no
+   API to mint a PAT programmatically, so this step has to be done by hand
+   in the GitHub UI. Then run
+   `echo "$YOUR_PAT" | primetime setup github-secrets-pat` to store it as
+   the `PRIMETIME_SECRETS_PAT` secret (read from stdin, never as a CLI
+   argument, so it can't leak through process listings). The scheduled
+   workflow needs this to write the refreshed Codex session back after
+   each run, since GitHub's default `GITHUB_TOKEN` cannot manage
+   repository secrets.
 
 This is based on OpenAI's own documented pattern for maintaining a
 ChatGPT-session `auth.json` in CI/CD (see
@@ -90,13 +102,14 @@ must respect:
   revoked, refreshing fails and re-running `setup()` (after `codex login`
   again locally) is required.
 
-Because GitHub's default `GITHUB_TOKEN` cannot manage repository secrets, the
-write-back step inside a scheduled workflow needs its own separate,
-narrowly-scoped fine-grained PAT (permission: this one repository's
-"Secrets: Read and write" only) to call `gh secret set` again from within the
-run. The actual scheduled workflow that bootstraps, runs, and writes back
-`auth.json` is not built yet — this only covers the one-time local-to-GitHub
-transfer.
+[`templates/github-actions/codex-prime.yml`](templates/github-actions/codex-prime.yml)
+is the actual scheduled workflow: it restores `auth.json` from
+`CODEX_AUTH_JSON`, runs the primer, and — using `PRIMETIME_SECRETS_PAT` —
+persists the refreshed session by running `primetime setup codex` again,
+this time from inside the runner. See that file's header comment for the
+full copy-in instructions, and
+[`templates/github-actions/README.md`](templates/github-actions/README.md)
+for an overview.
 
 ### Scheduler
 
