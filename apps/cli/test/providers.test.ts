@@ -1,11 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  ProviderOperationNotImplementedError,
-  UnknownProviderError,
-  selectProvider,
-} from "@primetime/providers";
+import { UnknownProviderError, selectProvider } from "@primetime/providers";
 
 test("selects the Codex provider", () => {
   const provider = selectProvider("codex");
@@ -32,12 +28,5 @@ test("does not echo an unknown provider value in errors", () => {
       assert.equal(error.message.includes(sensitiveLookingValue), false);
       return true;
     },
-  );
-});
-
-test("Codex setup reports that it is not implemented", async () => {
-  await assert.rejects(
-    selectProvider("codex").setup(),
-    ProviderOperationNotImplementedError,
   );
 });

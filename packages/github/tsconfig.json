@@ -8,5 +8,5 @@
     "outDir": "dist"
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
-  "references": [{ "path": "../shared" }, { "path": "../github" }]
+  "references": [{ "path": "../shared" }]
 }
