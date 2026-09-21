@@ -21,7 +21,14 @@ export async function GET(request: Request): Promise<Response> {
   const cookieStore = await cookies();
   const cookieState = cookieStore.get(OAUTH_STATE_COOKIE_NAME)?.value;
 
-  if (!code || !state || !cookieState || state !== cookieState) {
+  // GitHub reliably echoes `state` back for a plain OAuth authorize
+  // request, but doesn't always do so for the code issued by the combined
+  // install+authorize flow ("Request user authorization during
+  // installation") — so when it's missing, fall back to the httpOnly
+  // cookie alone (still unforgeable cross-origin, still single-use via
+  // `code`) rather than hard-failing a flow that otherwise succeeded. When
+  // GitHub *does* send a state, it must still match exactly.
+  if (!code || !cookieState || (state && state !== cookieState)) {
     return NextResponse.redirect(new URL("/?error=oauth_state", url.origin));
   }
 
@@ -34,7 +41,7 @@ export async function GET(request: Request): Promise<Response> {
     );
   }
 
-  const intent = decodeOauthIntent(state);
+  const intent = decodeOauthIntent(cookieState);
 
   try {
     const accessToken = await exchangeCodeForAccessToken({
