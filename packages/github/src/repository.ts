@@ -38,19 +38,43 @@ function isRepoViewJson(value: unknown): value is RepoViewJson {
   return typeof value === "object" && value !== null;
 }
 
+function parseOwnerRepo(nameWithOwner: string): RepositoryRef | undefined {
+  const [owner, name] = nameWithOwner.split("/");
+  if (owner === undefined || name === undefined || owner === "" || name === "") {
+    return undefined;
+  }
+  return { owner, name };
+}
+
 /**
- * Resolves the current directory's GitHub repository via `gh repo view`,
- * rather than parsing `git remote` output ourselves — this way `gh`'s own
- * authentication and remote-detection rules are the single source of truth.
+ * Resolves the target GitHub repository. If `GH_REPO` is set (the same
+ * environment variable `gh` itself documents for "commands that otherwise
+ * operate on a local repository"), it's used directly — `gh repo view`
+ * does NOT actually honor `GH_REPO` itself (verified: it still shells out
+ * to `git` and fails outside a git checkout even with `GH_REPO` set), which
+ * matters for a GitHub Actions runner that has no git checkout of the repo
+ * the workflow lives in. Otherwise falls back to `gh repo view`, so `gh`'s
+ * own authentication and remote-detection rules are the source of truth in
+ * an ordinary local checkout.
  */
 export async function resolveRepository(
   runner: GhRunner = defaultGhRunner,
   cwd?: string,
+  env: NodeJS.ProcessEnv = process.env,
 ): Promise<RepositoryRef> {
+  const override = env.GH_REPO;
+  if (override !== undefined && override.trim() !== "") {
+    const parsed = parseOwnerRepo(override.trim());
+    if (parsed === undefined) {
+      throw new RepositoryNotResolvedError();
+    }
+    return parsed;
+  }
+
   const result = await runner.run({
     args: ["repo", "view", "--json", "nameWithOwner"],
     ...(cwd === undefined ? {} : { cwd }),
-    env: process.env,
+    env,
     timeoutMs: REPOSITORY_TIMEOUT_MS,
     maxOutputBytes: MAX_OUTPUT_BYTES,
   });
@@ -63,21 +87,21 @@ export async function resolveRepository(
     throw new RepositoryNotResolvedError();
   }
 
-  let parsed: unknown;
+  let parsedJson: unknown;
   try {
-    parsed = JSON.parse(result.stdout);
+    parsedJson = JSON.parse(result.stdout);
   } catch {
     throw new RepositoryNotResolvedError();
   }
 
-  if (!isRepoViewJson(parsed) || typeof parsed.nameWithOwner !== "string") {
+  if (!isRepoViewJson(parsedJson) || typeof parsedJson.nameWithOwner !== "string") {
     throw new RepositoryNotResolvedError();
   }
 
-  const [owner, name] = parsed.nameWithOwner.split("/");
-  if (owner === undefined || name === undefined || owner === "" || name === "") {
+  const repository = parseOwnerRepo(parsedJson.nameWithOwner);
+  if (repository === undefined) {
     throw new RepositoryNotResolvedError();
   }
 
-  return { owner, name };
+  return repository;
 }
