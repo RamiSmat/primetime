@@ -14,17 +14,22 @@ export async function GET(request: Request): Promise<Response> {
 
   const url = new URL(request.url);
   const origin = url.origin;
-  const intent: OauthIntent = url.searchParams.get("intent") === "provision-repo" ? "provision-repo" : "signin";
+  const requestedIntent = url.searchParams.get("intent");
+  const intent: OauthIntent =
+    requestedIntent === "provision-repo" || requestedIntent === "install-app" ? requestedIntent : "signin";
   const state = encodeOauthState(intent);
 
-  // Plain sign-in only needs a user access token, so it goes straight to
-  // GitHub's authorize screen. Provisioning needs the App actually
-  // installed, which only the install URL triggers (see install-url.ts) —
-  // with "Request user authorization during installation" enabled on the
-  // App, completing that install still lands back on the same callback
-  // with a `code`, so the rest of the flow is unchanged.
+  // Only `install-app` goes through the install URL — that's the one that
+  // actually installs the App, but only walks the user through OAuth
+  // authorization (the step that hands the callback a `code`) on a
+  // genuinely new install; for an account that already has the App
+  // installed it just opens GitHub's "manage installation" settings page
+  // and never comes back (confirmed against the real deployment). Every
+  // other intent, including `provision-repo`, uses the plain authorize
+  // URL, which works the same regardless of install state — the callback
+  // itself checks whether an installation exists.
   const destination =
-    intent === "provision-repo"
+    intent === "install-app"
       ? buildInstallUrl({ state })
       : buildAuthorizeUrl({ clientId, redirectUri: `${origin}/api/auth/callback`, state });
 
