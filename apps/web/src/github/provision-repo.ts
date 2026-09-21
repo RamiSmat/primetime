@@ -12,6 +12,22 @@ export class RepositorySelectionNotAllError extends Error {
   }
 }
 
+/**
+ * Wraps a failed GitHub API call with enough detail (HTTP status + GitHub's
+ * own error message) to show the user something more actionable than
+ * "something went wrong" — none of this is a credential, so it's safe to
+ * surface directly.
+ */
+export class RepoCreationFailedError extends Error {
+  public constructor(
+    public readonly status: number,
+    public readonly detail: string,
+  ) {
+    super(`GitHub repository creation failed (${status}): ${detail}`);
+    this.name = "RepoCreationFailedError";
+  }
+}
+
 interface CreatedRepository {
   readonly fullName: string;
 }
@@ -81,5 +97,15 @@ async function createOrReuseRepository(accessToken: string): Promise<string> {
     return `${user.login}/${WARMUP_REPO_NAME}`;
   }
 
-  throw new Error(`GitHub repository creation failed with status ${createResponse.status}.`);
+  const rawBody = await createResponse.text();
+  let detail = rawBody;
+  try {
+    const parsed = JSON.parse(rawBody) as { message?: unknown };
+    if (typeof parsed.message === "string" && parsed.message !== "") {
+      detail = parsed.message;
+    }
+  } catch {
+    // Not JSON — fall back to the raw body text as-is.
+  }
+  throw new RepoCreationFailedError(createResponse.status, detail);
 }
