@@ -1,0 +1,129 @@
+name: PrimeTime Codex primer (hosted)
+
+# Copy this file into .github/workflows/ in your own PrimeTime-controlled
+# repository. This is the OIDC/GitHub-App variant of codex-prime.yml: it
+# trusts a hosted PrimeTime backend to mint the token that writes the
+# refreshed Codex session back to this repo's secret, instead of a
+# hand-created PRIMETIME_SECRETS_PAT. It never trusts that backend with the
+# Codex session itself — CODEX_AUTH_JSON still moves directly between this
+# runner and this repository's own secrets, exactly as in codex-prime.yml.
+#
+# If you'd rather not have a hosted backend in your trust chain at all, use
+# codex-prime.yml instead — it needs no GitHub App and no external backend,
+# only the PrimeTime CLI and `gh`.
+#
+# Before this will work:
+#
+#   1. Install the PrimeTime GitHub App (see the root README's "Hosted
+#      setup (GitHub App)" section) on this repository.
+#   2. From a local checkout of the PrimeTime CLI's repository, `codex
+#      login` (ChatGPT, an access token, or workload identity — never an API
+#      key), then run `primetime setup codex` to transfer that session to
+#      this repo's CODEX_AUTH_JSON secret. That's the only manual step left
+#      — no PAT to hand-create.
+#   3. Replace PRIMETIME_WEB_URL and OIDC_AUDIENCE below with the values for
+#      the actual deployed PrimeTime backend you installed the App from.
+#      PRIMETIME_WEB_URL is a placeholder until something is deployed.
+#
+# PrimeTime is not yet published as an installable package, so this
+# workflow checks out and builds its source directly; replace the
+# "Install PrimeTime" step with a plain package install once it is.
+
+on:
+  schedule:
+    # Placeholder cadence — replace with your own computed schedule (see
+    # `primetime schedule next`) once a schedule-generation step exists.
+    - cron: "30 13 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # Required so this job can request a GitHub Actions OIDC token proving
+  # "I am run X of workflow Y in repo Z" to the PrimeTime backend below.
+  id-token: write
+
+concurrency:
+  group: primetime-codex-primer-hosted
+  cancel-in-progress: false
+
+env:
+  # PLACEHOLDER — replace with your PrimeTime deployment's own URL once one
+  # exists. Must match the OIDC_AUDIENCE the backend was configured with.
+  PRIMETIME_WEB_URL: https://primetime.example.invalid
+  OIDC_AUDIENCE: https://primetime.example.invalid
+
+jobs:
+  prime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out PrimeTime
+        uses: actions/checkout@v4
+        with:
+          repository: RamiSmat/primetime
+          ref: main
+          path: primetime
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install PrimeTime
+        working-directory: primetime
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install the official Codex CLI
+        run: npm install -g @openai/codex
+
+      - name: Restore the Codex session
+        id: restore
+        env:
+          CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
+        run: |
+          if [ -z "$CODEX_AUTH_JSON" ]; then
+            echo "::error::CODEX_AUTH_JSON is not set. Run 'primetime setup codex' locally first." >&2
+            exit 1
+          fi
+          mkdir -p "$HOME/.codex"
+          printf '%s' "$CODEX_AUTH_JSON" > "$HOME/.codex/auth.json"
+          chmod 600 "$HOME/.codex/auth.json"
+
+      - name: Run the Codex primer
+        run: node primetime/apps/cli/dist/src/bin.js prime codex
+
+      - name: Persist the refreshed Codex session
+        # Runs even if the primer step above failed, so a refresh that
+        # happened before the failure is not lost — but only if the
+        # session was actually restored in the first place.
+        if: always() && steps.restore.outcome == 'success'
+        env:
+          GH_REPO: ${{ github.repository }}
+        run: |
+          # Exchange this run's GitHub Actions OIDC identity for a
+          # short-lived, repository-scoped installation token. The Codex
+          # session above never passes through this exchange or through
+          # PrimeTime's backend at all — only this one-time write-back
+          # token does, and it can do nothing but manage this repository's
+          # secrets for the next hour.
+          oidc_request_url="${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}"
+          oidc_token=$(curl -sf -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "$oidc_request_url" | jq -r '.value')
+
+          if [ -z "$oidc_token" ] || [ "$oidc_token" = "null" ]; then
+            echo "::warning::Could not obtain a GitHub Actions OIDC token, so the refreshed Codex session could not be saved. Future runs may need to re-authenticate sooner than expected." >&2
+            exit 0
+          fi
+
+          install_token=$(curl -sf -X POST \
+            -H "Authorization: Bearer ${oidc_token}" \
+            -H "Content-Type: application/json" \
+            "${PRIMETIME_WEB_URL}/api/actions/token" | jq -r '.token')
+
+          if [ -z "$install_token" ] || [ "$install_token" = "null" ]; then
+            echo "::warning::PrimeTime backend did not return an installation token, so the refreshed Codex session could not be saved. Confirm the PrimeTime GitHub App is installed on this repository." >&2
+            exit 0
+          fi
+
+          GH_TOKEN="$install_token" node primetime/apps/cli/dist/src/bin.js setup codex

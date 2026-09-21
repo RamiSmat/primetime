@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/shared" },
     { "path": "./packages/github" },
+    { "path": "./packages/github-app" },
     { "path": "./packages/providers" },
     { "path": "./packages/scheduler" },
     { "path": "./apps/cli" }

@@ -24,3 +24,22 @@ Requires two repository secrets, both set from your local machine via the
 This template is provisional: PrimeTime isn't published as an installable
 package yet, so it checks out and builds this repository's source directly
 on the runner rather than installing a released version.
+
+## `codex-prime-hosted.yml`
+
+Same primer flow as `codex-prime.yml`, but the write-back step is replaced
+with a GitHub Actions OIDC exchange against a hosted PrimeTime backend
+instead of a hand-created `PRIMETIME_SECRETS_PAT`. See the root README's
+"Hosted setup (GitHub App)" section for how the exchange works and what it
+does and doesn't trust the backend with — in short, the Codex session itself
+never passes through it, only a short-lived, repository-scoped token used
+solely to write the refreshed session back.
+
+Requires only one repository secret (`CODEX_AUTH_JSON`, same as above) plus
+the PrimeTime GitHub App installed on this repository. The file's header
+comment has the full setup instructions, including the placeholder
+`PRIMETIME_WEB_URL`/`OIDC_AUDIENCE` values you must replace with your actual
+deployment's.
+
+Use `codex-prime.yml` instead if you don't want a hosted backend in your
+trust chain at all — it remains fully self-contained.
