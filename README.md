@@ -11,7 +11,8 @@ This repository currently contains a minimal TypeScript monorepo with:
 - a `primetime prime <provider>` CLI;
 - a provider adapter contract, with a real Codex adapter and a placeholder
   interface for future providers;
-- package placeholders for scheduling and shared code; and
+- a scheduler package that computes primer run times from a work-start
+  configuration (see below), plus placeholder shared code; and
 - a placeholder directory for future GitHub Actions templates.
 
 ### Codex provider
@@ -48,6 +49,35 @@ What the primer request does:
 
 `setup()` (interactively authenticating a provider) is intentionally not
 implemented yet — authenticate directly with `codex login`.
+
+### Scheduler
+
+`@primetime/scheduler` computes when a primer should run from a user's
+work schedule:
+
+```ts
+import { computeNextPrimerRun, parseScheduleConfig } from "@primetime/scheduler";
+
+const config = parseScheduleConfig({
+  timeZone: "America/New_York",
+  workStartTime: "09:00",
+  leadTimeMinutes: 30,
+  activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+});
+
+computeNextPrimerRun(config, new Date());
+```
+
+`computeNextPrimerRun` returns the next absolute instant, strictly after
+`now`, that is `leadTimeMinutes` before `workStartTime` local to
+`timeZone`, on the next date whose local weekday is in `activeWeekdays`.
+It uses the JavaScript `Intl` API (no date library dependency) to convert
+local wall-clock time to UTC, so it accounts for daylight-saving
+transitions correctly on either side of the change. `parseScheduleConfig`
+validates an untrusted input object and throws a descriptive
+`InvalidScheduleConfigError` for anything malformed, rather than silently
+falling back to a default. This package is not yet wired into the CLI or
+GitHub Actions templates.
 
 ## Development
 
