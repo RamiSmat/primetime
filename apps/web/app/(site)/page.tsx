@@ -25,7 +25,7 @@ const STEPS = [
 export default async function HomePage() {
   const user = await getCurrentUser();
   const primaryCta = user
-    ? { href: "/dashboard", label: "Go to dashboard" }
+    ? { href: "/dashboard", label: "Go to setup" }
     : { href: "/api/auth/login", label: "Sign in with GitHub" };
 
   return (
