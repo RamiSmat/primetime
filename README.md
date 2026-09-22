@@ -11,9 +11,10 @@ This repository currently contains a minimal TypeScript monorepo with:
 - a `primetime prime <provider>`, `primetime schedule next <config-path>`,
   `primetime setup <provider>`, and `primetime setup github-secrets-pat`
   CLI;
-- a provider adapter contract, with a real Codex adapter (including a real
-  `setup()` that transfers your local Codex session to a GitHub Actions
-  secret) and a placeholder interface for future providers;
+- a provider adapter contract, with real Codex and Claude Code adapters
+  (each including a real `setup()` that transfers a local session/token to
+  a GitHub Actions secret) and a placeholder interface for future
+  providers;
 - a scheduler package that computes primer run times from a work-start
   configuration (see below), plus placeholder shared code; and
 - a GitHub Actions workflow template that runs the Codex primer on a
@@ -195,6 +196,71 @@ existing installation only accepts a classic PAT, which this project
 deliberately never asks users to create, so the dashboard surfaces an
 actionable error rather than silently failing if a user picks "Only select
 repositories" instead.
+
+### Claude Code provider
+
+`primetime prime claude-code` runs one minimal, sandboxed request through the
+official Claude Code CLI to start your existing Claude subscription usage
+window. It never handles credentials itself and never authenticates on your
+behalf.
+
+Prerequisites:
+
+- The official Claude Code CLI (`claude`) must be installed and on `PATH`.
+- You must already be logged in via a supported **non-API** method (for
+  example `claude auth login` with a claude.ai account, or a
+  `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token`). API-key logins
+  (`ANTHROPIC_API_KEY` / `ANTHROPIC_AUTH_TOKEN`) are explicitly rejected,
+  because in Claude Code's non-interactive mode they are always used when
+  present, billing per request instead of consuming a subscription usage
+  window.
+
+What the primer request does:
+
+- Runs `claude -p "Reply only with OK. Do not use tools or inspect files."
+  --disallowedTools "*" --permission-mode plan --permission-prompts none
+  --max-turns 1 --output-format json --no-session-persistence`, from inside
+  a freshly created, empty OS temporary directory that is deleted
+  immediately afterward — the request never runs inside this repository or
+  any other user directory, never touches your files, and (since Claude
+  Code has no working-directory flag of its own) also keeps any
+  project-level `CLAUDE.md` out of scope.
+- Strips `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` from the child
+  process environment so API billing can never be selected accidentally.
+- Never includes captured CLI output, environment values, or the token
+  itself in its result — failures are mapped to a small set of fixed,
+  sanitized messages (`cli_unavailable`, `authentication_required`,
+  `timeout`, `rate_limited`, `unknown_failure`), classified from the CLI's
+  own structured `--output-format json` result rather than by matching raw
+  text.
+
+#### GitHub Actions credential setup
+
+Unlike Codex's `$CODEX_HOME/auth.json`, Claude Code has no local session
+file to transfer: `claude setup-token` generates a **one-year long-lived
+OAuth token** and prints it to your terminal without ever writing it to
+disk. That also means, unlike the Codex flow below, **no refresh/write-back
+step is needed** — a scheduled workflow can reuse the same secret for its
+full one-year lifetime.
+
+1. Run `claude setup-token` locally. It opens a browser to authorize, then
+   prints the token once — copy it.
+2. From inside a checkout of your PrimeTime-controlled GitHub repository,
+   run `echo "$THE_TOKEN" | primetime setup claude-code`. It reads the
+   token from stdin (never a CLI argument, so it can't leak through process
+   listings), verifies it actually authenticates before doing anything
+   else, and pipes it directly to
+   [`gh secret set CLAUDE_CODE_OAUTH_TOKEN`](https://cli.github.com/manual/gh_secret_set),
+   scoped to that repository. `gh` performs GitHub's required sealed-box
+   encryption locally — PrimeTime implements no cryptography of its own,
+   and the token goes **directly from your machine to GitHub's API**, never
+   through a PrimeTime backend. This requires the GitHub CLI (`gh`) to be
+   installed and already authenticated (`gh auth login`).
+
+A GitHub Actions workflow template that consumes this secret
+(`claude-code-prime.yml`, the Claude Code equivalent of
+`templates/github-actions/codex-prime.yml`) is tracked as a follow-up and
+not yet included in this repository.
 
 ### Scheduler
 
