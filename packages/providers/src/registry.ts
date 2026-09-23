@@ -1,10 +1,12 @@
 import { PrimeTimeError } from "@primetime/shared";
 
 import type { ProviderAdapter } from "./adapter.js";
+import { claudeCodeProvider } from "./claude-code/index.js";
 import { codexProvider } from "./codex/index.js";
 
 const providers: ReadonlyMap<string, ProviderAdapter> = new Map([
   [codexProvider.id, codexProvider],
+  [claudeCodeProvider.id, claudeCodeProvider],
 ]);
 
 export class UnknownProviderError extends PrimeTimeError {

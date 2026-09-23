@@ -10,8 +10,16 @@ test("selects the Codex provider", () => {
   assert.equal(provider.name, "Codex");
 });
 
+test("selects the Claude Code provider", () => {
+  const provider = selectProvider("claude-code");
+
+  assert.equal(provider.id, "claude-code");
+  assert.equal(provider.name, "Claude Code");
+});
+
 test("provider selection is case insensitive", () => {
   assert.equal(selectProvider("CODEX").id, "codex");
+  assert.equal(selectProvider("CLAUDE-CODE").id, "claude-code");
 });
 
 test("rejects an unknown provider", () => {
