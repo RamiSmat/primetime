@@ -9,12 +9,17 @@
   macOS/Linux version) -- keep the two behaviorally in sync.
 
   Usage (run in a stock Windows PowerShell 5.1+ console):
-    &([scriptblock]::Create((irm <raw-url-to-this-file>))) <owner>/<repo> <primetime-web-url>
+    &([scriptblock]::Create((irm <raw-url-to-this-file>))) <owner>/<repo> <primetime-web-url> [provider...]
+
+  <provider...> is one or more of: codex, claude-code. Defaults to "codex"
+  alone when omitted.
 
   What this does, in order (each step below is announced before it runs):
-    1. Checks that git, node, npm, gh, and codex are all on your PATH.
-    2. Makes sure you're logged into `gh` and Codex, prompting you to log in
-       (in your terminal / browser) only if you aren't already.
+    1. Checks that git, node, npm, gh, and each selected provider's CLI are
+       all on your PATH.
+    2. Makes sure you're logged into `gh` and each selected provider,
+       prompting you to log in (in your terminal / browser) only if you
+       aren't already.
     3. Creates <repo> (as private) via `gh repo create`, if it doesn't
        already exist. PrimeTime's backend never creates repositories
        itself -- GitHub rejects that from any kind of GitHub App token, by
@@ -22,11 +27,12 @@
     4. Clones and builds PrimeTime into a throwaway temp directory that is
        deleted when this script exits -- PrimeTime isn't published as an
        installable package yet, so this is how the CLI is run for now.
-    5. Sends your local Codex session to <repo>'s CODEX_AUTH_JSON secret.
-       `gh` encrypts it and sends it directly to GitHub's API -- this script
-       and PrimeTime's own backend never see the session itself.
-    6. Adds or updates .github/workflows/primetime-codex-primer.yml in
-       <repo> via the GitHub API -- no local clone of <repo> needed.
+    5. Sends your local session/token for each selected provider to
+       <repo>'s secrets. `gh` encrypts it and sends it directly to GitHub's
+       API -- this script and PrimeTime's own backend never see it.
+    6. Adds or updates the scheduled workflow file for each selected
+       provider in <repo> via the GitHub API -- no local clone of <repo>
+       needed.
 
   Safe to re-run at any time.
 #>
@@ -36,20 +42,25 @@ param(
   [string]$Repo,
 
   [Parameter(Position = 1)]
-  [string]$PrimeTimeWebUrl
+  [string]$PrimeTimeWebUrl,
+
+  [Parameter(Position = 2, ValueFromRemainingArguments = $true)]
+  [string[]]$Providers
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 if (-not $Repo -or -not $PrimeTimeWebUrl) {
-  Write-Host "error: Usage: setup-warmup-repo.ps1 <owner>/<repo> <primetime-web-url>"
+  Write-Host "error: Usage: setup-warmup-repo.ps1 <owner>/<repo> <primetime-web-url> [provider...]"
   exit 1
 }
 
+if (-not $Providers -or $Providers.Count -eq 0) {
+  $Providers = @("codex")
+}
+
 $PrimeTimeSourceRepo = "https://github.com/RamiSmat/primetime.git"
-$RawTemplateUrl = "https://raw.githubusercontent.com/RamiSmat/primetime/main/templates/github-actions/codex-prime-hosted.yml"
-$WorkflowPath = ".github/workflows/primetime-codex-primer.yml"
 
 function Step([string]$Message) {
   Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -60,13 +71,91 @@ function Die([string]$Message) {
   exit 1
 }
 
+function Get-ProviderLabel([string]$Provider) {
+  switch ($Provider) {
+    "codex" { return "Codex" }
+    "claude-code" { return "Claude Code" }
+    default { Die "Unknown provider '$Provider'. Supported providers: codex, claude-code." }
+  }
+}
+
+function Get-ProviderCliBinary([string]$Provider) {
+  switch ($Provider) {
+    "codex" { return "codex" }
+    "claude-code" { return "claude" }
+  }
+}
+
+function Get-ProviderTemplateUrl([string]$Provider) {
+  switch ($Provider) {
+    "codex" { return "https://raw.githubusercontent.com/RamiSmat/primetime/main/templates/github-actions/codex-prime-hosted.yml" }
+    "claude-code" { return "https://raw.githubusercontent.com/RamiSmat/primetime/main/templates/github-actions/claude-code-prime.yml" }
+  }
+}
+
+function Get-ProviderWorkflowPath([string]$Provider) {
+  switch ($Provider) {
+    "codex" { return ".github/workflows/primetime-codex-primer.yml" }
+    "claude-code" { return ".github/workflows/primetime-claude-code-primer.yml" }
+  }
+}
+
+# Runs each provider's local login-check-and-transfer flow, storing its
+# credential as this repo's secret via `primetime setup <provider>`.
+function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
+  switch ($Provider) {
+    "codex" {
+      Step "Checking Codex login"
+      $codexStatus = (& codex login status 2>&1 | Out-String)
+      if ($codexStatus -match "(?i)not logged in") {
+        Write-Host "  Not logged in -- starting 'codex login' (this will prompt you)."
+        & codex login
+        if ($LASTEXITCODE -ne 0) { Die "'codex login' failed." }
+      } else {
+        Write-Host "  Already logged in (the next step will tell you if it's not a usable login method)."
+      }
+
+      Step "Sending your Codex session to $Repo as the CODEX_AUTH_JSON secret"
+      Write-Host "  gh performs GitHub's required encryption locally; nothing passes through PrimeTime's backend."
+      $env:GH_REPO = $Repo
+      try {
+        & node (Join-Path $CloneDir "apps/cli/dist/src/bin.js") setup codex
+        if ($LASTEXITCODE -ne 0) { Die "'primetime setup codex' failed." }
+      } finally {
+        Remove-Item Env:\GH_REPO -ErrorAction SilentlyContinue
+      }
+    }
+    "claude-code" {
+      Step "Getting a Claude Code CI token"
+      Write-Host "  Running 'claude setup-token' -- it opens a browser to authorize if needed, then prints a one-year token."
+      $claudeCodeToken = (& claude setup-token | Out-String).Trim()
+      if ($LASTEXITCODE -ne 0 -or -not $claudeCodeToken) { Die "'claude setup-token' failed." }
+
+      Step "Sending it to $Repo as the CLAUDE_CODE_OAUTH_TOKEN secret"
+      Write-Host "  gh performs GitHub's required encryption locally; nothing passes through PrimeTime's backend."
+      $env:GH_REPO = $Repo
+      try {
+        $claudeCodeToken | & node (Join-Path $CloneDir "apps/cli/dist/src/bin.js") setup claude-code
+        if ($LASTEXITCODE -ne 0) { Die "'primetime setup claude-code' failed." }
+      } finally {
+        Remove-Item Env:\GH_REPO -ErrorAction SilentlyContinue
+      }
+    }
+  }
+}
+
+foreach ($provider in $Providers) {
+  Get-ProviderLabel $provider | Out-Null
+}
+
 Step "Checking prerequisites"
-foreach ($cmd in @("git", "node", "npm", "gh", "codex")) {
+$requiredCmds = @("git", "node", "npm", "gh") + ($Providers | ForEach-Object { Get-ProviderCliBinary $_ })
+foreach ($cmd in $requiredCmds) {
   if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
     Die "'$cmd' is required but wasn't found on PATH. Install it and re-run this script."
   }
 }
-Write-Host "  git, node, npm, gh, and codex are all installed."
+Write-Host "  $($requiredCmds -join ', ') are all installed."
 
 Step "Checking GitHub CLI login"
 & gh auth status *> $null
@@ -76,16 +165,6 @@ if ($LASTEXITCODE -eq 0) {
   Write-Host "  Not logged in -- starting 'gh auth login' (this will prompt you)."
   & gh auth login
   if ($LASTEXITCODE -ne 0) { Die "'gh auth login' failed." }
-}
-
-Step "Checking Codex login"
-$codexStatus = (& codex login status 2>&1 | Out-String)
-if ($codexStatus -match "(?i)not logged in") {
-  Write-Host "  Not logged in -- starting 'codex login' (this will prompt you)."
-  & codex login
-  if ($LASTEXITCODE -ne 0) { Die "'codex login' failed." }
-} else {
-  Write-Host "  Already logged in (the next step will tell you if it's not a usable login method)."
 }
 
 Step "Ensuring $Repo exists"
@@ -121,41 +200,41 @@ try {
     Pop-Location
   }
 
-  Step "Sending your Codex session to $Repo as the CODEX_AUTH_JSON secret"
-  Write-Host "  gh performs GitHub's required encryption locally; nothing passes through PrimeTime's backend."
-  $env:GH_REPO = $Repo
-  try {
-    & node (Join-Path $CloneDir "apps/cli/dist/src/bin.js") setup codex
-    if ($LASTEXITCODE -ne 0) { Die "'primetime setup codex' failed." }
-  } finally {
-    Remove-Item Env:\GH_REPO -ErrorAction SilentlyContinue
+  foreach ($provider in $Providers) {
+    Invoke-ProviderSetup $provider $CloneDir
   }
 
-  Step "Adding the scheduled workflow to $Repo"
-  $TmpWorkflow = Join-Path $WorkDir "workflow.yml"
-  $template = Invoke-RestMethod -Uri $RawTemplateUrl
-  $template = $template.Replace("https://primetime.example.invalid", $PrimeTimeWebUrl)
-  [System.IO.File]::WriteAllText($TmpWorkflow, $template, (New-Object System.Text.UTF8Encoding($false)))
+  foreach ($provider in $Providers) {
+    $label = Get-ProviderLabel $provider
+    $workflowPath = Get-ProviderWorkflowPath $provider
+    $templateUrl = Get-ProviderTemplateUrl $provider
 
-  $existingSha = $null
-  $existingSha = & gh api "repos/$Repo/contents/$WorkflowPath" --jq ".sha" 2>$null
-  if ($LASTEXITCODE -ne 0) { $existingSha = $null }
+    Step "Adding the $label scheduled workflow to $Repo"
+    $tmpWorkflow = Join-Path $WorkDir "workflow-$provider.yml"
+    $template = Invoke-RestMethod -Uri $templateUrl
+    $template = $template.Replace("https://primetime.example.invalid", $PrimeTimeWebUrl)
+    [System.IO.File]::WriteAllText($tmpWorkflow, $template, (New-Object System.Text.UTF8Encoding($false)))
 
-  $contentB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($TmpWorkflow))
-  if ($existingSha) {
-    Write-Host "  $WorkflowPath already exists in $Repo -- updating it."
-    & gh api --method PUT "repos/$Repo/contents/$WorkflowPath" `
-      -f "message=Update PrimeTime scheduled workflow" -f "content=$contentB64" -f "sha=$existingSha" *> $null
-  } else {
-    Write-Host "  Creating $WorkflowPath."
-    & gh api --method PUT "repos/$Repo/contents/$WorkflowPath" `
-      -f "message=Add PrimeTime scheduled workflow" -f "content=$contentB64" *> $null
+    $existingSha = $null
+    $existingSha = & gh api "repos/$Repo/contents/$workflowPath" --jq ".sha" 2>$null
+    if ($LASTEXITCODE -ne 0) { $existingSha = $null }
+
+    $contentB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($tmpWorkflow))
+    if ($existingSha) {
+      Write-Host "  $workflowPath already exists in $Repo -- updating it."
+      & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
+        -f "message=Update PrimeTime $label scheduled workflow" -f "content=$contentB64" -f "sha=$existingSha" *> $null
+    } else {
+      Write-Host "  Creating $workflowPath."
+      & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
+        -f "message=Add PrimeTime $label scheduled workflow" -f "content=$contentB64" *> $null
+    }
+    if ($LASTEXITCODE -ne 0) { Die "Failed to write $workflowPath via gh api." }
   }
-  if ($LASTEXITCODE -ne 0) { Die "Failed to write $WorkflowPath via gh api." }
 
   Step "Done"
-  Write-Host "  $Repo is set up. $WorkflowPath runs on its own cron schedule --"
-  Write-Host "  edit that schedule, or trigger it once by hand from the repo's Actions tab to test it now."
+  Write-Host "  $Repo is set up. Each workflow added above runs on its own cron schedule --"
+  Write-Host "  edit that schedule, or trigger one by hand from the repo's Actions tab to test it now."
 } finally {
   Remove-Item -Recurse -Force $WorkDir -ErrorAction SilentlyContinue
 }

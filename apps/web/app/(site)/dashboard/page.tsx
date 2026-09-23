@@ -2,7 +2,7 @@ import { AlertTriangle, Sparkles } from "lucide-react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { OsCommandTabs } from "@/components/os-command-tabs";
+import { ProviderPicker } from "@/components/provider-picker";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,32 +15,8 @@ import { WARMUP_REPO_NAME } from "@/src/github/provision-repo";
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
 const INSTALL_APP_HREF = "/api/auth/login?intent=install-app";
 
-const SETUP_SCRIPT_SH_RAW_URL =
-  "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.sh";
-const SETUP_SCRIPT_SH_SOURCE_URL =
-  "https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.sh";
-const SETUP_SCRIPT_PS1_RAW_URL =
-  "https://raw.githubusercontent.com/RamiSmat/primetime/main/scripts/setup-warmup-repo.ps1";
-const SETUP_SCRIPT_PS1_SOURCE_URL =
-  "https://github.com/RamiSmat/primetime/blob/main/scripts/setup-warmup-repo.ps1";
 const WORKFLOW_TEMPLATE_SOURCE_URL =
-  "https://github.com/RamiSmat/primetime/blob/main/templates/github-actions/codex-prime-hosted.yml";
-
-const SETUP_SCRIPT_STEPS = [
-  "Checks that git, node, gh, and codex are installed",
-  "Logs you into gh / Codex, only if you aren't already",
-  "Creates this repository (via gh) if it doesn't exist yet",
-  "Sends your local Codex session straight to this repo's secrets via gh (never through PrimeTime)",
-  "Adds the scheduled workflow file to this repo",
-];
-
-function setupCommandUnix(repositoryFullName: string, primeTimeWebUrl: string): string {
-  return `curl -fsSL ${SETUP_SCRIPT_SH_RAW_URL} | bash -s -- ${repositoryFullName} ${primeTimeWebUrl}`;
-}
-
-function setupCommandWindows(repositoryFullName: string, primeTimeWebUrl: string): string {
-  return `&([scriptblock]::Create((irm ${SETUP_SCRIPT_PS1_RAW_URL}))) "${repositoryFullName}" "${primeTimeWebUrl}"`;
-}
+  "https://github.com/RamiSmat/primetime/blob/main/templates/github-actions";
 
 const ERROR_COPY: Record<string, { title: string; body: string }> = {
   not_installed: {
@@ -156,34 +132,7 @@ export default async function DashboardPage({
               reviewable script — it announces every step it takes, and it&apos;s safe to run
               again later.
             </CardDescription>
-            <OsCommandTabs
-              defaultOs="unix"
-              commands={[
-                {
-                  id: "unix",
-                  label: "macOS / Linux",
-                  code: setupCommandUnix(warmupRepo, origin),
-                  reviewHref: SETUP_SCRIPT_SH_SOURCE_URL,
-                },
-                {
-                  id: "windows",
-                  label: "Windows (PowerShell)",
-                  code: setupCommandWindows(warmupRepo, origin),
-                  reviewHref: SETUP_SCRIPT_PS1_SOURCE_URL,
-                },
-              ]}
-            />
-
-            <ul className="flex flex-col gap-1.5 text-sm text-muted-foreground">
-              {SETUP_SCRIPT_STEPS.map((item) => (
-                <li key={item} className="flex gap-2">
-                  <span aria-hidden className="text-foreground">
-                    ·
-                  </span>
-                  {item}
-                </li>
-              ))}
-            </ul>
+            <ProviderPicker repositoryFullName={warmupRepo} primeTimeWebUrl={origin} />
 
             <Separator />
 
@@ -193,7 +142,7 @@ export default async function DashboardPage({
               rel="noreferrer"
               className="w-fit text-sm text-muted-foreground underline-offset-4 hover:underline"
             >
-              See the workflow it adds
+              See the workflow templates it adds
             </a>
           </CardContent>
         </Card>
