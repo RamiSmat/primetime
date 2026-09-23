@@ -71,6 +71,22 @@ function Die([string]$Message) {
   exit 1
 }
 
+# PowerShell 5.1 treats any native command that both exits non-zero and
+# writes to stderr as a terminating NativeCommandError once that stream is
+# redirected -- even to $null -- as long as $ErrorActionPreference is "Stop".
+# Every call below that intentionally lets a native command fail (and checks
+# $LASTEXITCODE afterward instead of crashing) needs to run through this
+# wrapper, which scopes $ErrorActionPreference to "Continue" for just that call.
+function Invoke-NativeAllowFailure([scriptblock]$Command) {
+  $previousErrorActionPreference = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & $Command
+  } finally {
+    $ErrorActionPreference = $previousErrorActionPreference
+  }
+}
+
 function Get-ProviderLabel([string]$Provider) {
   switch ($Provider) {
     "codex" { return "Codex" }
@@ -106,18 +122,8 @@ function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
   switch ($Provider) {
     "codex" {
       Step "Checking Codex login"
-      # codex writes this status text to stderr, not stdout. Merging streams
-      # with 2>&1 under $ErrorActionPreference = "Stop" makes PowerShell 5.1
-      # treat each stderr line as a terminating NativeCommandError, even
-      # though the command itself exits 0 -- so this call needs "Continue"
-      # scoped to just this line.
-      $previousErrorActionPreference = $ErrorActionPreference
-      $ErrorActionPreference = "Continue"
-      try {
-        $codexStatus = (& codex login status 2>&1 | Out-String)
-      } finally {
-        $ErrorActionPreference = $previousErrorActionPreference
-      }
+      # codex writes this status text to stderr, not stdout.
+      $codexStatus = Invoke-NativeAllowFailure { (& codex login status 2>&1 | Out-String) }
       if ($codexStatus -match "(?i)not logged in") {
         Write-Host "  Not logged in -- starting 'codex login' (this will prompt you)."
         & codex login
@@ -169,7 +175,7 @@ foreach ($cmd in $requiredCmds) {
 Write-Host "  $($requiredCmds -join ', ') are all installed."
 
 Step "Checking GitHub CLI login"
-& gh auth status *> $null
+Invoke-NativeAllowFailure { & gh auth status *> $null }
 if ($LASTEXITCODE -eq 0) {
   Write-Host "  Already logged in."
 } else {
@@ -179,14 +185,16 @@ if ($LASTEXITCODE -eq 0) {
 }
 
 Step "Ensuring $Repo exists"
-& gh repo view $Repo *> $null
+Invoke-NativeAllowFailure { & gh repo view $Repo *> $null }
 if ($LASTEXITCODE -eq 0) {
   Write-Host "  Already exists."
 } else {
   Write-Host "  Creating it as a new private repository."
-  & gh repo create $Repo --private `
-    --description "Created by PrimeTime -- holds the scheduled workflow that warms up your AI coding CLI." `
-    *> $null
+  Invoke-NativeAllowFailure {
+    & gh repo create $Repo --private `
+      --description "Created by PrimeTime -- holds the scheduled workflow that warms up your AI coding CLI." `
+      *> $null
+  }
   if ($LASTEXITCODE -ne 0) { Die "Failed to create '$Repo' via gh repo create." }
 }
 
@@ -226,19 +234,22 @@ try {
     $template = $template.Replace("https://primetime.example.invalid", $PrimeTimeWebUrl)
     [System.IO.File]::WriteAllText($tmpWorkflow, $template, (New-Object System.Text.UTF8Encoding($false)))
 
-    $existingSha = $null
-    $existingSha = & gh api "repos/$Repo/contents/$workflowPath" --jq ".sha" 2>$null
+    $existingSha = Invoke-NativeAllowFailure { & gh api "repos/$Repo/contents/$workflowPath" --jq ".sha" 2>$null }
     if ($LASTEXITCODE -ne 0) { $existingSha = $null }
 
     $contentB64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($tmpWorkflow))
     if ($existingSha) {
       Write-Host "  $workflowPath already exists in $Repo -- updating it."
-      & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
-        -f "message=Update PrimeTime $label scheduled workflow" -f "content=$contentB64" -f "sha=$existingSha" *> $null
+      Invoke-NativeAllowFailure {
+        & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
+          -f "message=Update PrimeTime $label scheduled workflow" -f "content=$contentB64" -f "sha=$existingSha" *> $null
+      }
     } else {
       Write-Host "  Creating $workflowPath."
-      & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
-        -f "message=Add PrimeTime $label scheduled workflow" -f "content=$contentB64" *> $null
+      Invoke-NativeAllowFailure {
+        & gh api --method PUT "repos/$Repo/contents/$workflowPath" `
+          -f "message=Add PrimeTime $label scheduled workflow" -f "content=$contentB64" *> $null
+      }
     }
     if ($LASTEXITCODE -ne 0) { Die "Failed to write $workflowPath via gh api." }
   }
