@@ -24,9 +24,12 @@ name: PrimeTime Codex primer
 
 on:
   schedule:
-    # Placeholder cadence — replace with your own computed schedule (see
-    # `primetime schedule next`) once a schedule-generation step exists.
-    - cron: "30 13 * * 1-5"
+    # Runs every 15 minutes, all day, every day — actual timing is decided
+    # by the "Check whether a primer is due" step below, which is
+    # timezone/DST-aware (see `primetime schedule due`). A fixed daytime UTC
+    # band can't safely cover every IANA offset, so this cadence
+    # intentionally doesn't try to narrow the window itself.
+    - cron: "*/15 * * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -41,6 +44,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Check out this repository
+        uses: actions/checkout@v4
+        # No `repository`/`path` override — this checks out the repo the
+        # workflow lives in, giving the due-check step below access to
+        # .primetime/schedule.json. Distinct from "Check out PrimeTime"
+        # below, which checks out PrimeTime's own source into primetime/.
+
       - name: Check out PrimeTime
         uses: actions/checkout@v4
         with:
@@ -59,11 +69,31 @@ jobs:
           npm ci
           npm run build
 
+      - name: Check whether a primer is due
+        id: due-check
+        # A missing .primetime/schedule.json is a real error (exit 1, not
+        # "always due" or "never due") — it means setup didn't finish, and
+        # that should surface loudly rather than silently misbehave.
+        run: |
+          set +e
+          node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json
+          code=$?
+          set -e
+          if [ "$code" -eq 0 ]; then
+            echo "due=true" >> "$GITHUB_OUTPUT"
+          elif [ "$code" -eq 2 ]; then
+            echo "due=false" >> "$GITHUB_OUTPUT"
+          else
+            exit "$code"
+          fi
+
       - name: Install the official Codex CLI
+        if: steps.due-check.outputs.due == 'true'
         run: npm install -g @openai/codex
 
       - name: Restore the Codex session
         id: restore
+        if: steps.due-check.outputs.due == 'true'
         env:
           CODEX_AUTH_JSON: ${{ secrets.CODEX_AUTH_JSON }}
         run: |
@@ -76,13 +106,14 @@ jobs:
           chmod 600 "$HOME/.codex/auth.json"
 
       - name: Run the Codex primer
+        if: steps.due-check.outputs.due == 'true'
         run: node primetime/apps/cli/dist/src/bin.js prime codex
 
       - name: Persist the refreshed Codex session
         # Runs even if the primer step above failed, so a refresh that
-        # happened before the failure is not lost — but only if the
-        # session was actually restored in the first place.
-        if: always() && steps.restore.outcome == 'success'
+        # happened before the failure is not lost — but only if a primer was
+        # actually due this run and the session was actually restored.
+        if: always() && steps.due-check.outputs.due == 'true' && steps.restore.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.PRIMETIME_SECRETS_PAT }}
           # This runner has no git checkout of the repo this workflow lives
