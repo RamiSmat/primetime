@@ -32,7 +32,7 @@ async function withTempFile(
 test("reads and parses a valid schedule config file", async () => {
   await withTempFile(JSON.stringify(VALID_CONFIG), async (filePath) => {
     const config = await readScheduleConfigFile(filePath);
-    assert.deepEqual(config, VALID_CONFIG);
+    assert.deepEqual(config, { ...VALID_CONFIG, deadTimeWindows: [] });
   });
 });
 

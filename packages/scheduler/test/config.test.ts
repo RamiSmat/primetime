@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { InvalidScheduleConfigError, parseScheduleConfig, parseWorkStartTime } from "../src/config.js";
+import {
+  InvalidScheduleConfigError,
+  parseDeadTimeWindow,
+  parseScheduleConfig,
+  parseWorkStartTime,
+} from "../src/config.js";
 
 const VALID_CONFIG = {
   timeZone: "America/New_York",
@@ -10,8 +15,77 @@ const VALID_CONFIG = {
   activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
 };
 
-test("parses a valid configuration", () => {
-  assert.deepEqual(parseScheduleConfig(VALID_CONFIG), VALID_CONFIG);
+test("parses a valid configuration, defaulting deadTimeWindows to an empty array", () => {
+  assert.deepEqual(parseScheduleConfig(VALID_CONFIG), { ...VALID_CONFIG, deadTimeWindows: [] });
+});
+
+test("parses a valid configuration with dead-time windows", () => {
+  const withWindows = {
+    ...VALID_CONFIG,
+    deadTimeWindows: [
+      { startTime: "12:00", endTime: "13:00" },
+      { startTime: "15:00", endTime: "15:15" },
+    ],
+  };
+  assert.deepEqual(parseScheduleConfig(withWindows), withWindows);
+});
+
+test("parses a single dead-time window", () => {
+  assert.deepEqual(parseDeadTimeWindow({ startTime: "12:00", endTime: "13:00" }), {
+    startTime: "12:00",
+    endTime: "13:00",
+  });
+});
+
+test("rejects a malformed dead-time window", () => {
+  assert.throws(() => parseDeadTimeWindow(null), InvalidScheduleConfigError);
+  assert.throws(() => parseDeadTimeWindow({ startTime: "12:00" }), InvalidScheduleConfigError);
+  assert.throws(
+    () => parseDeadTimeWindow({ startTime: "not-a-time", endTime: "13:00" }),
+    InvalidScheduleConfigError,
+  );
+  assert.throws(
+    () => parseDeadTimeWindow({ startTime: "13:00", endTime: "13:00" }),
+    InvalidScheduleConfigError,
+    "endTime equal to startTime must be rejected",
+  );
+  assert.throws(
+    () => parseDeadTimeWindow({ startTime: "13:00", endTime: "12:00" }),
+    InvalidScheduleConfigError,
+    "endTime before startTime must be rejected",
+  );
+});
+
+test("rejects a non-array deadTimeWindows field", () => {
+  assert.throws(
+    () => parseScheduleConfig({ ...VALID_CONFIG, deadTimeWindows: { startTime: "12:00", endTime: "13:00" } }),
+    InvalidScheduleConfigError,
+  );
+});
+
+test("rejects overlapping dead-time windows", () => {
+  assert.throws(
+    () =>
+      parseScheduleConfig({
+        ...VALID_CONFIG,
+        deadTimeWindows: [
+          { startTime: "12:00", endTime: "13:00" },
+          { startTime: "12:30", endTime: "14:00" },
+        ],
+      }),
+    InvalidScheduleConfigError,
+  );
+});
+
+test("accepts back-to-back (touching, non-overlapping) dead-time windows", () => {
+  const config = {
+    ...VALID_CONFIG,
+    deadTimeWindows: [
+      { startTime: "12:00", endTime: "13:00" },
+      { startTime: "13:00", endTime: "13:30" },
+    ],
+  };
+  assert.deepEqual(parseScheduleConfig(config), config);
 });
 
 test("parses a work start time into hour and minute", () => {

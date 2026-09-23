@@ -10,7 +10,9 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { getCurrentUser } from "@/src/auth/current-user";
 import { getInstallationStore } from "@/src/db/store";
+import { getWarmupSettingsStore } from "@/src/db/warmup-settings-store";
 import { WARMUP_REPO_NAME } from "@/src/github/provision-repo";
+import { DEFAULT_SCHEDULE_CONFIG } from "@/src/settings/warmup-settings-handler";
 
 const CREATE_REPO_HREF = "/api/auth/login?intent=provision-repo";
 const INSTALL_APP_HREF = "/api/auth/login?intent=install-app";
@@ -50,6 +52,8 @@ export default async function DashboardPage({
 
   const store = getInstallationStore();
   const repositories = await store.listRepositoriesForAccount(user.login);
+  const warmupSettings = await getWarmupSettingsStore().getSettings(user.login);
+  const scheduleConfig = warmupSettings?.scheduleConfig ?? DEFAULT_SCHEDULE_CONFIG;
   // With "All repositories" access, the installation (and so this list)
   // covers every repo the account has — not just the one PrimeTime
   // created — so pick out the dedicated warmup repo by name rather than
@@ -64,7 +68,12 @@ export default async function DashboardPage({
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">Setup</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Setup</h1>
+        <a href="/dashboard/settings" className={cn(buttonVariants({ variant: "outline", size: "sm" }))}>
+          Warmup schedule
+        </a>
+      </div>
       <p className="mt-1 text-sm text-muted-foreground">
         Signed in as <span className="font-medium text-foreground">{user.login}</span>
       </p>
@@ -132,7 +141,11 @@ export default async function DashboardPage({
               reviewable script — it announces every step it takes, and it&apos;s safe to run
               again later.
             </CardDescription>
-            <ProviderPicker repositoryFullName={warmupRepo} primeTimeWebUrl={origin} />
+            <ProviderPicker
+              repositoryFullName={warmupRepo}
+              primeTimeWebUrl={origin}
+              scheduleConfig={scheduleConfig}
+            />
 
             <Separator />
 

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { DEFAULT_DUE_TOLERANCE_MINUTES } from "@primetime/scheduler";
+
 import { CliUsageError, parseCliArguments } from "../src/arguments.js";
 
 test("parses the prime command and provider", () => {
@@ -43,6 +45,53 @@ test("rejects an unsupported schedule subcommand", () => {
 test("rejects a schedule next command with extra arguments", () => {
   assert.throws(
     () => parseCliArguments(["schedule", "next", "./schedule.json", "extra"]),
+    CliUsageError,
+  );
+});
+
+test("parses the schedule due command and config path, defaulting the tolerance", () => {
+  assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json"]), {
+    command: "schedule-due",
+    configPath: "./schedule.json",
+    toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES,
+  });
+});
+
+test("parses the schedule due command with an explicit tolerance", () => {
+  assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "5"]), {
+    command: "schedule-due",
+    configPath: "./schedule.json",
+    toleranceMinutes: 5,
+  });
+});
+
+test("rejects a schedule due command missing a config path", () => {
+  assert.throws(() => parseCliArguments(["schedule", "due"]), CliUsageError);
+});
+
+test("rejects a schedule due command with a malformed --tolerance-minutes flag", () => {
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "not-a-number"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "0"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "-5"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--wrong-flag", "5"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "5", "extra"]),
     CliUsageError,
   );
 });

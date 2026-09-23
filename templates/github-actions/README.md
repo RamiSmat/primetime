@@ -3,6 +3,36 @@
 Workflow templates never contain credentials and use only user-controlled
 GitHub Actions secrets.
 
+## Scheduling: frequent cron + a due-check step
+
+All three templates below use the same scheduling mechanism. GitHub Actions'
+`schedule.cron` is fixed-UTC and can't itself track an IANA time zone's DST
+shifts or (once dead-time windows are configured) more than one trigger time
+per day, so none of these templates try to compute a single precise `cron:`
+line. Instead, each one:
+
+1. Triggers on a tight, fixed cadence (`cron: "*/15 * * * *"` — every 15
+   minutes, all day, every day) that intentionally doesn't try to narrow
+   itself to any particular time-zone band.
+2. Checks out the repository the workflow itself lives in (in addition to
+   PrimeTime's own source, checked out separately for building the CLI) so
+   it has access to a `.primetime/schedule.json` file at the repo root —
+   added by the PrimeTime dashboard's "Create my warmup repository" setup
+   command, alongside the workflow file itself.
+3. Runs `primetime schedule due .primetime/schedule.json` as its first real
+   step. This is the timezone/DST-aware decision point: it exits `0` when a
+   primer is actually due right now, `2` when it isn't (an expected,
+   non-error outcome), or `1` for a real error (e.g. a missing or invalid
+   config file — this surfaces loudly rather than silently skipping or
+   always running).
+4. Gates every subsequent step on that step's `due` output, so a "not due"
+   tick costs one cheap CLI invocation and skips the rest of the job.
+
+If `.primetime/schedule.json` is missing, the due-check step fails the job
+(exit `1`) rather than guessing — that almost always means the warmup
+repo's setup command hasn't finished, and should be visible in the Actions
+tab rather than silently never priming (or always priming).
+
 ## `codex-prime.yml`
 
 Runs `primetime prime codex` on a schedule, using a Codex session transferred

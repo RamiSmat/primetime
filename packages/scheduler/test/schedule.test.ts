@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { computeNextPrimerRun, NoActivePrimerWindowError } from "../src/schedule.js";
+import {
+  computeNextPrimerRun,
+  computePrimerInstantsForDate,
+  NoActivePrimerWindowError,
+} from "../src/schedule.js";
 import type { ScheduleConfig } from "../src/types.js";
 
 const WEEKDAY_CONFIG: ScheduleConfig = {
@@ -9,6 +13,7 @@ const WEEKDAY_CONFIG: ScheduleConfig = {
   workStartTime: "09:00",
   leadTimeMinutes: 30,
   activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+  deadTimeWindows: [],
 };
 
 test("computes today's primer time when it is still ahead, in winter (EST)", () => {
@@ -79,4 +84,58 @@ test("throws when there are no active weekdays", () => {
     () => computeNextPrimerRun(noActiveDays, new Date("2024-01-15T10:00:00Z")),
     NoActivePrimerWindowError,
   );
+});
+
+test("computePrimerInstantsForDate returns nothing on an inactive weekday", () => {
+  // 2024-01-14 is a Sunday, not in WEEKDAY_CONFIG's activeWeekdays.
+  const result = computePrimerInstantsForDate(WEEKDAY_CONFIG, { year: 2024, month: 1, day: 14 });
+  assert.deepEqual(result, []);
+});
+
+test("computePrimerInstantsForDate returns just the work-start instant with no dead-time windows", () => {
+  const result = computePrimerInstantsForDate(WEEKDAY_CONFIG, { year: 2024, month: 1, day: 15 });
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.reason, "work-start");
+  assert.equal(result[0]!.instant.toISOString(), "2024-01-15T13:30:00.000Z");
+});
+
+test("computePrimerInstantsForDate adds a re-prime instant before each dead-time window ends", () => {
+  const config: ScheduleConfig = {
+    ...WEEKDAY_CONFIG,
+    deadTimeWindows: [{ startTime: "12:00", endTime: "13:00" }],
+  };
+  const result = computePrimerInstantsForDate(config, { year: 2024, month: 1, day: 15 });
+  assert.equal(result.length, 2);
+  assert.equal(result[0]!.reason, "work-start");
+  assert.equal(result[0]!.instant.toISOString(), "2024-01-15T13:30:00.000Z");
+  assert.equal(result[1]!.reason, "dead-time-window-end");
+  // 13:00 EST minus a 30-minute lead time is 12:30 EST = 17:30Z.
+  assert.equal(result[1]!.instant.toISOString(), "2024-01-15T17:30:00.000Z");
+});
+
+test("computes a dead-time window's re-prime instant correctly across a DST transition", () => {
+  const config: ScheduleConfig = {
+    ...WEEKDAY_CONFIG,
+    deadTimeWindows: [{ startTime: "13:00", endTime: "14:00" }],
+  };
+  // 2024-03-11 is already EDT (UTC-4): 14:00 EDT minus 30 minutes is 13:30 EDT = 17:30Z,
+  // one hour earlier than the equivalent EST instant would be.
+  const result = computePrimerInstantsForDate(config, { year: 2024, month: 3, day: 11 });
+  assert.equal(result[1]!.instant.toISOString(), "2024-03-11T17:30:00.000Z");
+});
+
+test("computeNextPrimerRun advances to a same-day dead-time-window re-prime rather than skipping to the next day", () => {
+  const config: ScheduleConfig = {
+    ...WEEKDAY_CONFIG,
+    deadTimeWindows: [{ startTime: "12:00", endTime: "13:00" }],
+  };
+  // 14:00Z = 09:00 EST: today's work-start primer (13:30Z) has passed, but the
+  // dead-time-window re-prime (17:30Z) has not.
+  const result = computeNextPrimerRun(config, new Date("2024-01-15T14:00:00Z"));
+  assert.equal(result.toISOString(), "2024-01-15T17:30:00.000Z");
+});
+
+test("computeNextPrimerRun behaves exactly as before when deadTimeWindows is empty", () => {
+  const result = computeNextPrimerRun(WEEKDAY_CONFIG, new Date("2024-01-15T10:00:00Z"));
+  assert.equal(result.toISOString(), "2024-01-15T13:30:00.000Z");
 });
