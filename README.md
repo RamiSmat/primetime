@@ -257,10 +257,16 @@ full one-year lifetime.
    through a PrimeTime backend. This requires the GitHub CLI (`gh`) to be
    installed and already authenticated (`gh auth login`).
 
-A GitHub Actions workflow template that consumes this secret
-(`claude-code-prime.yml`, the Claude Code equivalent of
-`templates/github-actions/codex-prime.yml`) is tracked as a follow-up and
-not yet included in this repository.
+[`templates/github-actions/claude-code-prime.yml`](templates/github-actions/claude-code-prime.yml)
+is the actual scheduled workflow: it sets `CLAUDE_CODE_OAUTH_TOKEN` from the
+secret above and runs the primer — see that file's header comment for the
+full copy-in instructions, and
+[`templates/github-actions/README.md`](templates/github-actions/README.md)
+for an overview. Unlike Codex's two templates, there's no hosted/`-hosted`
+variant: both of those exist only to offer two different ways to write a
+refreshed Codex session back to its secret after each run, and Claude
+Code's token needs no write-back at all — it's reused as-is for its full
+one-year lifetime.
 
 ### Scheduler
 
