@@ -1,6 +1,6 @@
 import { PrimeTimeError } from "@primetime/shared";
 
-import { WEEKDAYS, type ScheduleConfig, type Weekday } from "./types.js";
+import { WEEKDAYS, type DeadTimeWindow, type ScheduleConfig, type Weekday } from "./types.js";
 
 export class InvalidScheduleConfigError extends PrimeTimeError {
   public constructor(reason: string) {
@@ -16,16 +16,83 @@ export interface WorkStartTime {
   readonly minute: number;
 }
 
-export function parseWorkStartTime(value: string): WorkStartTime {
+function parseTimeOfDay(value: string, fieldLabel: string): WorkStartTime {
   const match = WORK_START_TIME_PATTERN.exec(value);
   if (!match) {
     throw new InvalidScheduleConfigError(
-      `workStartTime must be a 24-hour "HH:MM" string, received ${JSON.stringify(value)}.`,
+      `${fieldLabel} must be a 24-hour "HH:MM" string, received ${JSON.stringify(value)}.`,
     );
   }
 
   // Both capture groups are guaranteed present whenever the pattern matches.
   return { hour: Number(match[1]!), minute: Number(match[2]!) };
+}
+
+export function parseWorkStartTime(value: string): WorkStartTime {
+  return parseTimeOfDay(value, "workStartTime");
+}
+
+function minutesOfDay(time: WorkStartTime): number {
+  return time.hour * 60 + time.minute;
+}
+
+/**
+ * Parses and validates a single dead-time window. `startTime`/`endTime` must
+ * each be a 24-hour "HH:MM" string, with `endTime` strictly after
+ * `startTime` — overnight windows aren't supported yet.
+ */
+export function parseDeadTimeWindow(value: unknown): DeadTimeWindow {
+  if (typeof value !== "object" || value === null) {
+    throw new InvalidScheduleConfigError("each deadTimeWindows entry must be an object.");
+  }
+
+  const candidate = value as Record<string, unknown>;
+
+  if (typeof candidate.startTime !== "string") {
+    throw new InvalidScheduleConfigError("deadTimeWindows entry startTime must be a string.");
+  }
+  if (typeof candidate.endTime !== "string") {
+    throw new InvalidScheduleConfigError("deadTimeWindows entry endTime must be a string.");
+  }
+
+  const startTime = parseTimeOfDay(candidate.startTime, "deadTimeWindows entry startTime");
+  const endTime = parseTimeOfDay(candidate.endTime, "deadTimeWindows entry endTime");
+  if (minutesOfDay(endTime) <= minutesOfDay(startTime)) {
+    throw new InvalidScheduleConfigError(
+      `deadTimeWindows entry endTime (${candidate.endTime}) must be strictly after startTime (${candidate.startTime}).`,
+    );
+  }
+
+  return { startTime: candidate.startTime, endTime: candidate.endTime };
+}
+
+function parseDeadTimeWindowsField(value: unknown): DeadTimeWindow[] {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    throw new InvalidScheduleConfigError("deadTimeWindows must be an array.");
+  }
+
+  const windows = value.map((entry) => parseDeadTimeWindow(entry));
+
+  const sortedByStart = [...windows].sort(
+    (a, b) => minutesOfDay(parseTimeOfDay(a.startTime, "deadTimeWindows entry startTime"))
+      - minutesOfDay(parseTimeOfDay(b.startTime, "deadTimeWindows entry startTime")),
+  );
+  for (let i = 1; i < sortedByStart.length; i += 1) {
+    const previous = sortedByStart[i - 1]!;
+    const current = sortedByStart[i]!;
+    const previousEnd = minutesOfDay(parseTimeOfDay(previous.endTime, "deadTimeWindows entry endTime"));
+    const currentStart = minutesOfDay(parseTimeOfDay(current.startTime, "deadTimeWindows entry startTime"));
+    if (currentStart < previousEnd) {
+      throw new InvalidScheduleConfigError(
+        `deadTimeWindows entries must not overlap: ${JSON.stringify(previous)} and ${JSON.stringify(current)}.`,
+      );
+    }
+  }
+
+  return windows;
 }
 
 function isKnownWeekday(value: unknown): value is Weekday {
@@ -87,10 +154,13 @@ export function parseScheduleConfig(raw: unknown): ScheduleConfig {
     }
   }
 
+  const deadTimeWindows = parseDeadTimeWindowsField(candidate.deadTimeWindows);
+
   return {
     timeZone: candidate.timeZone,
     workStartTime: candidate.workStartTime,
     leadTimeMinutes: candidate.leadTimeMinutes,
     activeWeekdays: candidate.activeWeekdays as Weekday[],
+    deadTimeWindows,
   };
 }
