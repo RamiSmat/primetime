@@ -1,4 +1,6 @@
-import { integer, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, serial, text, timestamp, unique } from "drizzle-orm/pg-core";
+
+import type { ScheduleConfig } from "@primetime/scheduler";
 
 /**
  * One row per GitHub App installation (an account installing the App onto
@@ -30,3 +32,23 @@ export const installationRepositories = pgTable(
   },
   (table) => [unique().on(table.installationId, table.repositoryFullName)],
 );
+
+/**
+ * One row per GitHub account: their saved warmup schedule (work-start time,
+ * dead-time windows, ...) plus how many subscriptions they have per
+ * provider. Stored as one `ScheduleConfig`-shaped JSON blob rather than
+ * exploded columns, since `@primetime/scheduler#parseScheduleConfig` is
+ * already the one authoritative shape/validator for it — this table's API
+ * route is the only writer, and it always validates through that function
+ * first. `subscriptionCounts` is purely inert data for a future
+ * multi-account-credential-storage issue to consume; nothing here changes
+ * how any provider adapter or secret is named or stored.
+ */
+export const warmupSettings = pgTable("warmup_settings", {
+  id: serial("id").primaryKey(),
+  accountLogin: text("account_login").notNull().unique(),
+  scheduleConfig: jsonb("schedule_config").$type<ScheduleConfig>().notNull(),
+  subscriptionCounts: jsonb("subscription_counts").$type<Record<string, number>>().notNull().default({}),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

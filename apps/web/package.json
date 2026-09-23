@@ -8,11 +8,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test test/webhook-handler.test.ts test/token-handler.test.ts"
+    "test": "tsx --test test/webhook-handler.test.ts test/token-handler.test.ts test/setup-command.test.ts test/warmup-settings-handler.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
     "@primetime/github-app": "0.1.0",
+    "@primetime/scheduler": "0.1.0",
     "@primetime/shared": "0.1.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

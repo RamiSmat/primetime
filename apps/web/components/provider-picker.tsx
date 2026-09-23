@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import type { ScheduleConfig } from "@primetime/scheduler";
+
 import { OsCommandTabs } from "@/components/os-command-tabs";
 import { cn } from "@/lib/utils";
 import { setupCommandUnix, setupCommandWindows } from "@/lib/setup-command";
@@ -21,9 +23,11 @@ const PROVIDER_STEP_COPY: Record<DashboardProvider["id"], string> = {
 export function ProviderPicker({
   repositoryFullName,
   primeTimeWebUrl,
+  scheduleConfig,
 }: {
   repositoryFullName: string;
   primeTimeWebUrl: string;
+  scheduleConfig: ScheduleConfig;
 }) {
   const [selectedIds, setSelectedIds] = useState<readonly string[]>(DEFAULT_PROVIDER_IDS);
 
@@ -72,13 +76,13 @@ export function ProviderPicker({
           {
             id: "unix",
             label: "macOS / Linux",
-            code: setupCommandUnix(repositoryFullName, primeTimeWebUrl, selectedIds),
+            code: setupCommandUnix(repositoryFullName, primeTimeWebUrl, selectedIds, scheduleConfig),
             reviewHref: SETUP_SCRIPT_SH_SOURCE_URL,
           },
           {
             id: "windows",
             label: "Windows (PowerShell)",
-            code: setupCommandWindows(repositoryFullName, primeTimeWebUrl, selectedIds),
+            code: setupCommandWindows(repositoryFullName, primeTimeWebUrl, selectedIds, scheduleConfig),
             reviewHref: SETUP_SCRIPT_PS1_SOURCE_URL,
           },
         ]}
