@@ -106,7 +106,18 @@ function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
   switch ($Provider) {
     "codex" {
       Step "Checking Codex login"
-      $codexStatus = (& codex login status 2>&1 | Out-String)
+      # codex writes this status text to stderr, not stdout. Merging streams
+      # with 2>&1 under $ErrorActionPreference = "Stop" makes PowerShell 5.1
+      # treat each stderr line as a terminating NativeCommandError, even
+      # though the command itself exits 0 -- so this call needs "Continue"
+      # scoped to just this line.
+      $previousErrorActionPreference = $ErrorActionPreference
+      $ErrorActionPreference = "Continue"
+      try {
+        $codexStatus = (& codex login status 2>&1 | Out-String)
+      } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+      }
       if ($codexStatus -match "(?i)not logged in") {
         Write-Host "  Not logged in -- starting 'codex login' (this will prompt you)."
         & codex login
