@@ -10,10 +10,12 @@
 # twin instead: scripts/setup-warmup-repo.ps1 -- keep the two in sync.
 #
 # Usage:
-#   curl -fsSL <raw-url-to-this-file> | bash -s -- <owner>/<repo> <primetime-web-url> [provider...]
+#   curl -fsSL <raw-url-to-this-file> | bash -s -- <owner>/<repo> <primetime-web-url> [provider...] [--schedule-base64=<base64>]
 #
 # <provider...> is one or more of: codex, claude-code. Defaults to "codex"
-# alone when omitted.
+# alone when omitted. --schedule-base64 (added by the PrimeTime dashboard's
+# generated command) carries your saved warmup schedule as base64-encoded
+# JSON; omit it to skip adding .primetime/schedule.json.
 #
 # What this does, in order (each step below is announced before it runs):
 #   1. Checks that git, node, npm, gh, and each selected provider's CLI are
@@ -34,6 +36,10 @@
 #   6. Adds or updates the scheduled workflow file for each selected
 #      provider in <repo> via the GitHub API — no local clone of <repo>
 #      needed.
+#   7. Adds or updates .primetime/schedule.json in <repo> from
+#      --schedule-base64, the same way — this is what each scheduled
+#      workflow's due-check step reads to decide when to actually prime,
+#      so the workflow never needs to call back to PrimeTime's backend.
 #
 # Safe to re-run at any time.
 
@@ -42,7 +48,19 @@ set -euo pipefail
 REPO="${1:?Usage: setup-warmup-repo.sh <owner>/<repo> <primetime-web-url> [provider...]}"
 PRIMETIME_WEB_URL="${2:?Usage: setup-warmup-repo.sh <owner>/<repo> <primetime-web-url> [provider...]}"
 shift 2 || true
-PROVIDERS=("$@")
+
+SCHEDULE_BASE64=""
+PROVIDERS=()
+for arg in "$@"; do
+  case "$arg" in
+    --schedule-base64=*)
+      SCHEDULE_BASE64="${arg#--schedule-base64=}"
+      ;;
+    *)
+      PROVIDERS+=("$arg")
+      ;;
+  esac
+done
 if [ "${#PROVIDERS[@]}" -eq 0 ]; then
   PROVIDERS=("codex")
 fi
@@ -177,6 +195,30 @@ for provider in "${PROVIDERS[@]}"; do
       -f message="Add PrimeTime $label scheduled workflow" -f content="$content_b64" >/dev/null
   fi
 done
+
+if [ -n "$SCHEDULE_BASE64" ]; then
+  step "Adding your warmup schedule to $REPO"
+  # --schedule-base64 is already base64 of the exact JSON bytes GitHub's
+  # Contents API wants, so it's passed straight through as this file's
+  # content — no local decode/re-encode round trip needed (and no
+  # GNU-vs-BSD `base64 -d`/`-D` portability question to deal with).
+  existing_sha="$(gh api "repos/$REPO/contents/.primetime/schedule.json" --jq '.sha' 2>/dev/null || true)"
+  content_b64="$SCHEDULE_BASE64"
+  if [ -n "$existing_sha" ]; then
+    echo "  .primetime/schedule.json already exists in $REPO — updating it."
+    gh api --method PUT "repos/$REPO/contents/.primetime/schedule.json" \
+      -f message="Update PrimeTime warmup schedule" -f content="$content_b64" -f sha="$existing_sha" >/dev/null
+  else
+    echo "  Creating .primetime/schedule.json."
+    gh api --method PUT "repos/$REPO/contents/.primetime/schedule.json" \
+      -f message="Add PrimeTime warmup schedule" -f content="$content_b64" >/dev/null
+  fi
+else
+  echo
+  echo "  No --schedule-base64 provided — skipping .primetime/schedule.json."
+  echo "  Each scheduled workflow's due-check step will fail until one is added"
+  echo "  (save a schedule on the PrimeTime dashboard and re-run this command)."
+fi
 
 step "Done"
 echo "  $REPO is set up. Each workflow added above runs on its own cron schedule —"
