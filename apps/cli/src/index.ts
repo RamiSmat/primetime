@@ -1,10 +1,13 @@
 import { selectProvider } from "@primetime/providers";
-import { computeNextPrimerRun } from "@primetime/scheduler";
+import { computeNextPrimerRun, isPrimerDue } from "@primetime/scheduler";
 import { PrimeTimeError } from "@primetime/shared";
 
 import { parseCliArguments } from "./arguments.js";
 import { setupGithubSecretsPat } from "./github-secrets-pat.js";
 import { readScheduleConfigFile } from "./schedule.js";
+
+/** Exit code for `schedule due` when no primer is due right now — an expected outcome, not a failure. */
+export const SCHEDULE_NOT_DUE_EXIT_CODE = 2;
 
 export interface CliIo {
   writeOutput(message: string): void;
@@ -38,6 +41,19 @@ export async function runCli(
       const nextRun = computeNextPrimerRun(config, new Date());
       io.writeOutput(`Next primer run: ${nextRun.toISOString()}`);
       return 0;
+    }
+
+    if (command.command === "schedule-due") {
+      const config = await readScheduleConfigFile(command.configPath);
+      const due = isPrimerDue(config, new Date(), command.toleranceMinutes);
+
+      if (due) {
+        io.writeOutput(`Primer is due (tolerance ${command.toleranceMinutes}m).`);
+        return 0;
+      }
+
+      io.writeOutput(`Primer is not due (tolerance ${command.toleranceMinutes}m).`);
+      return SCHEDULE_NOT_DUE_EXIT_CODE;
     }
 
     if (command.command === "setup-provider") {
