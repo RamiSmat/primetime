@@ -43,3 +43,29 @@ deployment's.
 
 Use `codex-prime.yml` instead if you don't want a hosted backend in your
 trust chain at all — it remains fully self-contained.
+
+## `claude-code-prime.yml`
+
+Runs `primetime prime claude-code` on a schedule, using a Claude Code
+session token transferred from your local machine (see the root README's
+"GitHub Actions credential setup" section under "Claude Code provider" for
+why this works the way it does). The file itself has the full setup
+instructions in its header comment.
+
+Requires only one repository secret, set from your local machine via the
+`primetime` CLI, never through a PrimeTime backend:
+
+- `CLAUDE_CODE_OAUTH_TOKEN` — a one-year long-lived token from
+  `claude setup-token` (`primetime setup claude-code`, reading the token
+  from stdin).
+
+Unlike the two Codex templates above, there's no self-hosted/hosted split
+here and no `-hosted` variant: those two variants exist only to offer two
+different ways to write a refreshed Codex session back to the secret after
+each run, and Claude Code's token needs no such write-back — it's reused
+as-is for its full one-year lifetime.
+
+This template is provisional in the same way as the Codex ones: PrimeTime
+isn't published as an installable package yet, so it checks out and builds
+this repository's source directly on the runner rather than installing a
+released version.
