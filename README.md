@@ -16,9 +16,14 @@ This repository currently contains a minimal TypeScript monorepo with:
   a GitHub Actions secret) and a placeholder interface for future
   providers;
 - a scheduler package that computes primer run times from a work-start
-  configuration (see below), plus placeholder shared code; and
-- a GitHub Actions workflow template that runs the Codex primer on a
-  schedule (see below).
+  configuration, including recurring daily "dead-time" windows like lunch
+  or meetings (see below), plus placeholder shared code;
+- GitHub Actions workflow templates that run the Codex and Claude Code
+  primers on a schedule, including hosted (GitHub App) variants (see
+  below); and
+- a hosted web UI (`apps/web`) with GitHub sign-in, a dashboard that
+  provisions a private warmup repository, and a warmup-schedule settings
+  page (see "Hosted setup (GitHub App)" below).
 
 ### Codex provider
 
@@ -180,7 +185,17 @@ prerequisites, log you into `gh`/each chosen provider only if you aren't
 already, create the repository itself via `gh repo create` if it doesn't
 exist yet, transfer each provider's session/token to its own secret, and
 add each provider's scheduled workflow file, announcing each step as it
-runs.
+runs. If the dashboard has a saved warmup schedule (see below), the
+generated command also carries it as a `--schedule-base64` flag, which the
+scripts write to `.primetime/schedule.json` in the target repo — the file
+each scheduled workflow's due-check step reads (see the Scheduler section
+above), so the workflow never has to call back to `apps/web` at run time.
+
+A "Warmup schedule" settings page on the dashboard lets you edit the time
+zone, work-start time, lead time, active weekdays, and any recurring
+dead-time windows that back that schedule, backed by the same
+`@primetime/scheduler#parseScheduleConfig` validation as the CLI.
+
 `apps/web/.env.example` documents the environment variables a real
 deployment needs
 (`GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`,
@@ -284,18 +299,23 @@ const config = parseScheduleConfig({
   workStartTime: "09:00",
   leadTimeMinutes: 30,
   activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
+  // Optional: recurring daily gaps (lunch, standing meetings, ...) that
+  // get their own re-prime instant right before they end. Defaults to [].
+  deadTimeWindows: [{ startTime: "12:00", endTime: "13:00" }],
 });
 
 computeNextPrimerRun(config, new Date());
 ```
 
 `computeNextPrimerRun` returns the next absolute instant, strictly after
-`now`, that is `leadTimeMinutes` before `workStartTime` local to
+`now`, that is either `leadTimeMinutes` before `workStartTime`, or
+`leadTimeMinutes` before the end of a `deadTimeWindows` entry, local to
 `timeZone`, on the next date whose local weekday is in `activeWeekdays`.
 It uses the JavaScript `Intl` API (no date library dependency) to convert
 local wall-clock time to UTC, so it accounts for daylight-saving
 transitions correctly on either side of the change. `parseScheduleConfig`
-validates an untrusted input object and throws a descriptive
+validates an untrusted input object (including that dead-time windows are
+well-formed and don't overlap) and throws a descriptive
 `InvalidScheduleConfigError` for anything malformed, rather than silently
 falling back to a default.
 
@@ -308,8 +328,27 @@ node apps/cli/dist/src/bin.js schedule next ./schedule.json
 # Next primer run: 2024-01-16T13:30:00.000Z
 ```
 
-It does not yet trigger `prime` itself on a schedule — that still requires
-the GitHub Actions integration, which is not yet built.
+A second command, `primetime schedule due <config-path>
+[--tolerance-minutes <n>] [--last-primed-at <iso-timestamp>]`, is the
+actual decision point a scheduled GitHub Actions workflow polls on a
+frequent, fixed cron cadence, since GitHub Actions' `schedule.cron` is
+fixed-UTC and can't itself track an IANA time zone's DST shifts (or, with
+dead-time windows configured, more than one trigger time per day). It
+exits `0` when a primer is due right now, `2` when it isn't (an expected,
+non-error outcome), and `1` for a real error. `--last-primed-at`, fed from
+a persisted state file, lets it additionally catch up on an instant that a
+dropped or delayed GitHub schedule tick already missed, as long as no
+primer has succeeded since — see
+[`templates/github-actions/README.md`](templates/github-actions/README.md)
+for the full mechanism and why a fixed tolerance alone isn't enough.
+
+This is exactly what the GitHub Actions workflow templates described
+above (Codex and Claude Code, self-hosted and hosted) build on — see
+[`templates/github-actions/README.md`](templates/github-actions/README.md)
+for how the due-check, catch-up, and state-file steps fit together, and
+the "Hosted setup (GitHub App)" section below for how the dashboard's
+warmup-schedule settings page feeds a saved `ScheduleConfig` into a
+warmup repository as `.primetime/schedule.json`.
 
 ## Development
 
@@ -332,5 +371,5 @@ does its own type-checking and bundling, and needs `packages/github-app` and
 
 ```sh
 npm run build -w apps/web    # next build
-npx tsx --test apps/web/test/webhook-handler.test.ts apps/web/test/token-handler.test.ts
+npm test -w apps/web         # tsx --test against every file in apps/web/test
 ```
