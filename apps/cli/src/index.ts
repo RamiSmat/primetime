@@ -45,7 +45,7 @@ export async function runCli(
 
     if (command.command === "schedule-due") {
       const config = await readScheduleConfigFile(command.configPath);
-      const due = isPrimerDue(config, new Date(), command.toleranceMinutes);
+      const due = isPrimerDue(config, new Date(), command.toleranceMinutes, command.lastPrimedAt);
 
       if (due) {
         io.writeOutput(`Primer is due (tolerance ${command.toleranceMinutes}m).`);
