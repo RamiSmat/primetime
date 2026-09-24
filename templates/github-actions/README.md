@@ -33,6 +33,21 @@ If `.primetime/schedule.json` is missing, the due-check step fails the job
 repo's setup command hasn't finished, and should be visible in the Actions
 tab rather than silently never priming (or always priming).
 
+**GitHub's `schedule` trigger is best-effort, not guaranteed.** GitHub's own
+docs warn that scheduled workflow runs can be delayed during periods of high
+load — most pronounced right at cron's round marks (`:00`/`:15`/`:30`/`:45`,
+which this cadence uses) — and in practice a run can be skipped outright for
+hours at a time, not just delayed by a few minutes. Since each schedule
+config only produces one narrow due-instant per event (work-start, or each
+dead-time window's end), a single dropped tick during that window means the
+whole day's primer for that event silently doesn't run — nothing fails, the
+job just has nothing to do that tick. All three templates pass
+`--tolerance-minutes 20` (wider than the CLI's own 8-minute default) to
+`schedule due` to absorb ordinary lateness, but this cannot help when GitHub
+drops ticks for longer than that. If primers are missing more often than
+expected, check the workflow's Actions run history for gaps of more than
+~20-30 minutes around the expected instant before assuming a config problem.
+
 ## `codex-prime.yml`
 
 Runs `primetime prime codex` on a schedule, using a Codex session transferred

@@ -92,9 +92,16 @@ jobs:
         # A missing .primetime/schedule.json is a real error (exit 1, not
         # "always due" or "never due") — it means setup didn't finish, and
         # that should surface loudly rather than silently misbehave.
+        #
+        # --tolerance-minutes 20 (wider than the CLI's own 8-minute default)
+        # gives GitHub's best-effort `schedule` trigger more room to still
+        # catch a primer instant even when a tick lands late — GitHub's own
+        # docs warn that scheduled runs can be delayed under load, and that
+        # is most pronounced right at cron's round marks (:00/:15/:30/:45),
+        # which this cadence uses.
         run: |
           set +e
-          node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json
+          node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20
           code=$?
           set -e
           if [ "$code" -eq 0 ]; then
