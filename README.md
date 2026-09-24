@@ -191,7 +191,10 @@ prerequisites, log you into `gh`/each chosen provider only if you aren't
 already, create the repository itself via `gh repo create` if it doesn't
 exist yet, transfer each provider's session/token to its own secret, and
 add each provider's scheduled workflow file, announcing each step as it
-runs. If the dashboard has a saved warmup schedule (see below), the
+runs. A provider whose CLI isn't installed, or whose login/setup step
+fails, is skipped with a warning rather than aborting the whole run — the
+script only fails outright if none of your chosen providers end up
+configured. If the dashboard has a saved warmup schedule (see below), the
 generated command also carries it as a `--schedule-base64` flag, which the
 scripts write to `.primetime/schedule.json` in the target repo — the file
 each scheduled workflow's due-check step reads (see the Scheduler section

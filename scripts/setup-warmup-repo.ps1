@@ -17,11 +17,15 @@
   JSON; omit it to skip adding .primetime/schedule.json.
 
   What this does, in order (each step below is announced before it runs):
-    1. Checks that git, node, npm, gh, and each selected provider's CLI are
-       all on your PATH.
-    2. Makes sure you're logged into `gh` and each selected provider,
+    1. Checks that git, node, npm, and gh are on your PATH (hard requirement),
+       then checks each selected provider's CLI -- a provider whose CLI isn't
+       found is skipped with a warning rather than aborting the whole run.
+       You only need at least one selected provider's CLI installed.
+    2. Makes sure you're logged into `gh` and each remaining provider,
        prompting you to log in (in your terminal / browser) only if you
-       aren't already.
+       aren't already. A provider whose login or setup step fails is also
+       skipped with a warning -- the run only fails outright if none of your
+       selected providers end up configured.
     3. Creates <repo> (as private) via `gh repo create`, if it doesn't
        already exist. PrimeTime's backend never creates repositories
        itself -- GitHub rejects that from any kind of GitHub App token, by
@@ -134,7 +138,9 @@ function Get-ProviderWorkflowPath([string]$Provider) {
 }
 
 # Runs each provider's local login-check-and-transfer flow, storing its
-# credential as this repo's secret via `primetime setup <provider>`.
+# credential as this repo's secret via `primetime setup <provider>`. Returns
+# $true/$false instead of dying, so one failing provider doesn't take the
+# others down -- see the caller.
 function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
   switch ($Provider) {
     "codex" {
@@ -144,7 +150,7 @@ function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
       if ($codexStatus -match "(?i)not logged in") {
         Write-Host "  Not logged in -- starting 'codex login' (this will prompt you)."
         & codex login
-        if ($LASTEXITCODE -ne 0) { Die "'codex login' failed." }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "'codex login' failed."; return $false }
       } else {
         Write-Host "  Already logged in (the next step will tell you if it's not a usable login method)."
       }
@@ -154,26 +160,28 @@ function Invoke-ProviderSetup([string]$Provider, [string]$CloneDir) {
       $env:GH_REPO = $Repo
       try {
         & node (Join-Path $CloneDir "apps/cli/dist/src/bin.js") setup codex
-        if ($LASTEXITCODE -ne 0) { Die "'primetime setup codex' failed." }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "'primetime setup codex' failed."; return $false }
       } finally {
         Remove-Item Env:\GH_REPO -ErrorAction SilentlyContinue
       }
+      return $true
     }
     "claude-code" {
       Step "Getting a Claude Code CI token"
       Write-Host "  Running 'claude setup-token' -- it opens a browser to authorize if needed, then prints a one-year token."
       $claudeCodeToken = (& claude setup-token | Out-String).Trim()
-      if ($LASTEXITCODE -ne 0 -or -not $claudeCodeToken) { Die "'claude setup-token' failed." }
+      if ($LASTEXITCODE -ne 0 -or -not $claudeCodeToken) { Write-Warning "'claude setup-token' failed."; return $false }
 
       Step "Sending it to $Repo as the CLAUDE_CODE_OAUTH_TOKEN secret"
       Write-Host "  gh performs GitHub's required encryption locally; nothing passes through PrimeTime's backend."
       $env:GH_REPO = $Repo
       try {
         $claudeCodeToken | & node (Join-Path $CloneDir "apps/cli/dist/src/bin.js") setup claude-code
-        if ($LASTEXITCODE -ne 0) { Die "'primetime setup claude-code' failed." }
+        if ($LASTEXITCODE -ne 0) { Write-Warning "'primetime setup claude-code' failed."; return $false }
       } finally {
         Remove-Item Env:\GH_REPO -ErrorAction SilentlyContinue
       }
+      return $true
     }
   }
 }
@@ -183,13 +191,28 @@ foreach ($provider in $Providers) {
 }
 
 Step "Checking prerequisites"
-$requiredCmds = @("git", "node", "npm", "gh") + ($Providers | ForEach-Object { Get-ProviderCliBinary $_ })
+$requiredCmds = @("git", "node", "npm", "gh")
 foreach ($cmd in $requiredCmds) {
   if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) {
     Die "'$cmd' is required but wasn't found on PATH. Install it and re-run this script."
   }
 }
-Write-Host "  $($requiredCmds -join ', ') are all installed."
+
+$originalProviders = $Providers
+$ActiveProviders = @()
+foreach ($provider in $Providers) {
+  $cliBin = Get-ProviderCliBinary $provider
+  if (Get-Command $cliBin -ErrorAction SilentlyContinue) {
+    $ActiveProviders += $provider
+  } else {
+    Write-Host "  warning: '$cliBin' (needed for $(Get-ProviderLabel $provider)) wasn't found on PATH -- skipping $(Get-ProviderLabel $provider)." -ForegroundColor Yellow
+  }
+}
+if ($ActiveProviders.Count -eq 0) {
+  Die "None of the selected providers' CLIs were found on PATH: $($originalProviders -join ', '). Install at least one and re-run this script."
+}
+$Providers = $ActiveProviders
+Write-Host "  $($requiredCmds -join ', ') are all installed; providers ready: $($Providers -join ', ')."
 
 Step "Checking GitHub CLI login"
 Invoke-NativeAllowFailure { & gh auth status *> $null }
@@ -236,9 +259,18 @@ try {
     Pop-Location
   }
 
+  $ActiveProviders = @()
   foreach ($provider in $Providers) {
-    Invoke-ProviderSetup $provider $CloneDir
+    if (Invoke-ProviderSetup $provider $CloneDir) {
+      $ActiveProviders += $provider
+    } else {
+      Write-Host "  warning: setting up $(Get-ProviderLabel $provider) failed -- skipping it. Re-run this script later to retry." -ForegroundColor Yellow
+    }
   }
+  if ($ActiveProviders.Count -eq 0) {
+    Die "Setup failed for every selected provider. See the warnings above."
+  }
+  $Providers = $ActiveProviders
 
   foreach ($provider in $Providers) {
     $label = Get-ProviderLabel $provider
