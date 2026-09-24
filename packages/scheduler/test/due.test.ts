@@ -60,6 +60,16 @@ test("does not catch up once a primer already ran at or after the instant", () =
   assert.equal(isPrimerDue(WEEKDAY_CONFIG, wellPastTolerance, DEFAULT_DUE_TOLERANCE_MINUTES, lastPrimedAt), false);
 });
 
+test("does not re-fire within tolerance once a primer already ran for that instant", () => {
+  // A later tick that still lands inside the (widened) tolerance window
+  // must not re-report due once lastPrimedAt already covers the instant --
+  // otherwise every tick in a wide window would re-run the primer.
+  const instant = new Date("2024-01-15T13:30:00Z");
+  const stillWithinTolerance = new Date(instant.getTime() + 5 * 60_000);
+  const lastPrimedAt = new Date(instant.getTime() + 60_000);
+  assert.equal(isPrimerDue(WEEKDAY_CONFIG, stillWithinTolerance, DEFAULT_DUE_TOLERANCE_MINUTES, lastPrimedAt), false);
+});
+
 test("does not catch up on a future instant even with a stale lastPrimedAt", () => {
   const instant = new Date("2024-01-15T13:30:00Z");
   const beforeInstant = new Date(instant.getTime() - 60 * 60_000);

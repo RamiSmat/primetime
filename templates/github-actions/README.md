@@ -66,6 +66,13 @@ that:
   how long GitHub's scheduler stays silent, only that it eventually sends
   one more tick before the next instant is due.
 
+The state file also does double duty as a re-fire guard: once
+`lastPrimedAt` is at or after an instant, `isPrimerDue` skips that instant
+entirely, even for a later tick that still lands inside the 20-minute
+tolerance window. Without that, a 15-minute cadence against a 20-minute-wide
+window would otherwise re-run the primer two or three times for the same
+instant.
+
 If primers are still missing after this, check the workflow's Actions run
 history for gaps of many hours with no runs at all — that points at GitHub's
 scheduler itself outright refusing to trigger the workflow, which no amount

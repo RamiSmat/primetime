@@ -123,8 +123,11 @@ export const DEFAULT_DUE_TOLERANCE_MINUTES = 8;
  * are best-effort and can be delayed or dropped for far longer than any
  * fixed symmetric tolerance could reasonably absorb. Bounded to at most a
  * one-day lag by only ever considering yesterday/today/tomorrow's instants.
+ * `lastPrimedAt` also suppresses the ordinary tolerance check once it's at
+ * or after an instant, so a wide tolerance window doesn't make every tick
+ * still inside it re-fire a primer that already ran for that instant.
  * Without `lastPrimedAt`, behavior is unchanged: a missed tolerance window
- * means that instant is simply never due.
+ * means that instant is simply never due, and there's no re-fire guard.
  */
 export function isPrimerDue(
   config: ScheduleConfig,
@@ -142,12 +145,20 @@ export function isPrimerDue(
   for (const dayOffset of [-1, 0, 1]) {
     const candidateDate = addCalendarDays(today, dayOffset);
     for (const { instant } of computePrimerInstantsForDate(config, candidateDate)) {
+      // A primer at or after this instant already covers it -- skip it
+      // entirely so a wide tolerance window (needed to absorb GitHub's
+      // scheduling jitter) doesn't re-fire on every later tick that still
+      // happens to land within it.
+      if (lastPrimedAt !== undefined && lastPrimedAt.getTime() >= instant.getTime()) {
+        continue;
+      }
+
       if (Math.abs(now.getTime() - instant.getTime()) <= toleranceMillis) {
         return true;
       }
+
       const isPastInstant = instant.getTime() <= now.getTime();
-      const missedByPrimer = lastPrimedAt !== undefined && lastPrimedAt.getTime() < instant.getTime();
-      if (isPastInstant && missedByPrimer) {
+      if (lastPrimedAt !== undefined && isPastInstant) {
         return true;
       }
     }
