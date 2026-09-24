@@ -11,8 +11,8 @@ export default async function HomePage() {
     : { href: "/api/auth/login", label: "Sign in with GitHub" };
 
   return (
-    <main className="mx-auto max-w-3xl px-4 py-16">
-      <section className="relative flex flex-col gap-4">
+    <main className="mx-auto flex w-full max-w-3xl flex-1 items-center px-4">
+      <section className="relative flex w-full flex-col items-center gap-4 text-center">
         <div
           aria-hidden
           className="pointer-events-none absolute -top-24 left-1/2 -z-10 h-72 w-[36rem] -translate-x-1/2 rounded-full bg-ember/15 blur-3xl"
