@@ -13,7 +13,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { AVAILABLE_PROVIDERS } from "@/lib/providers";
+import { listTimeZones } from "@/lib/timezones";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_LABELS: Record<Weekday, string> = {
@@ -38,6 +40,7 @@ export function WarmupSettingsForm({
   readonly initialSubscriptionCounts: Readonly<Record<string, number>>;
 }) {
   const [timeZone, setTimeZone] = useState(initialScheduleConfig.timeZone);
+  const [timeZoneOptions] = useState(() => listTimeZones(initialScheduleConfig.timeZone));
   const [workStartTime, setWorkStartTime] = useState(initialScheduleConfig.workStartTime);
   const [leadTimeMinutes, setLeadTimeMinutes] = useState(
     String(initialScheduleConfig.leadTimeMinutes),
@@ -137,12 +140,17 @@ export function WarmupSettingsForm({
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="timeZone">Time zone</Label>
-          <Input
+          <Select
             id="timeZone"
             value={timeZone}
             onChange={(event) => setTimeZone(event.target.value)}
-            placeholder="America/New_York"
-          />
+          >
+            {timeZoneOptions.map((zone) => (
+              <option key={zone} value={zone}>
+                {zone}
+              </option>
+            ))}
+          </Select>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="workStartTime">Work starts at</Label>
