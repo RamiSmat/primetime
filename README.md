@@ -1,5 +1,11 @@
 # PrimeTime
 
+[![License: ISC](https://img.shields.io/github/license/RamiSmat/primetime)](LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/RamiSmat/primetime?style=flat)](https://github.com/RamiSmat/primetime/stargazers)
+[![Open issues](https://img.shields.io/github/issues/RamiSmat/primetime)](https://github.com/RamiSmat/primetime/issues)
+[![Last commit](https://img.shields.io/github/last-commit/RamiSmat/primetime)](https://github.com/RamiSmat/primetime/commits/main)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 PrimeTime is an early-stage utility for scheduling lightweight primer requests
 for AI coding tools. Provider credentials must remain on user-controlled
 infrastructure and must never pass through a PrimeTime backend.
