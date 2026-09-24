@@ -147,6 +147,37 @@ test("schedule due exits 2 and reports not due when no active weekday falls near
   });
 });
 
+test("schedule due catches up on a missed instant when --last-primed-at predates it", async () => {
+  // The primer instant is 20 minutes before "now" -- well outside the
+  // default 8-minute tolerance, simulating a scheduler tick that arrived
+  // late. Passing a --last-primed-at from before that instant should still
+  // report it due; a fresh instant this test also checks with no
+  // --last-primed-at flag confirms the same config is "not due" on its own.
+  const missedInstant = new Date(Date.now() - 20 * 60_000);
+  const config = {
+    timeZone: "UTC",
+    workStartTime: `${String(missedInstant.getUTCHours()).padStart(2, "0")}:${String(missedInstant.getUTCMinutes()).padStart(2, "0")}`,
+    leadTimeMinutes: 0,
+    activeWeekdays: ALL_WEEKDAYS,
+  };
+  await withTempConfigFile(JSON.stringify(config), async (filePath) => {
+    const notCaughtUp = fakeIo();
+    const notCaughtUpExitCode = await runCli(["schedule", "due", filePath], notCaughtUp);
+    assert.equal(notCaughtUpExitCode, 2);
+    assert.match(notCaughtUp.output[0]!, /^Primer is not due/);
+
+    const caughtUp = fakeIo();
+    const lastPrimedAt = new Date(missedInstant.getTime() - 60_000).toISOString();
+    const caughtUpExitCode = await runCli(
+      ["schedule", "due", filePath, "--last-primed-at", lastPrimedAt],
+      caughtUp,
+    );
+    assert.equal(caughtUpExitCode, 0);
+    assert.equal(caughtUp.errors.length, 0);
+    assert.match(caughtUp.output[0]!, /^Primer is due/);
+  });
+});
+
 test("schedule due reports a clear error and exit code 1 for an invalid schedule", async () => {
   await withTempConfigFile(
     JSON.stringify({ ...VALID_CONFIG, activeWeekdays: [] }),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { isPrimerDue } from "../src/schedule.js";
+import { DEFAULT_DUE_TOLERANCE_MINUTES, isPrimerDue } from "../src/schedule.js";
 import type { ScheduleConfig } from "../src/types.js";
 
 const WEEKDAY_CONFIG: ScheduleConfig = {
@@ -42,6 +42,29 @@ test("accepts a custom tolerance", () => {
   const now = new Date(instant.getTime() + 20 * 60_000);
   assert.equal(isPrimerDue(WEEKDAY_CONFIG, now), false);
   assert.equal(isPrimerDue(WEEKDAY_CONFIG, now, 25), true);
+});
+
+test("catches up on an instant missed by more than the tolerance when lastPrimedAt predates it", () => {
+  const instant = new Date("2024-01-15T13:30:00Z");
+  const wellPastTolerance = new Date(instant.getTime() + 60 * 60_000);
+  assert.equal(isPrimerDue(WEEKDAY_CONFIG, wellPastTolerance), false);
+
+  const lastPrimedAt = new Date(instant.getTime() - 60_000);
+  assert.equal(isPrimerDue(WEEKDAY_CONFIG, wellPastTolerance, DEFAULT_DUE_TOLERANCE_MINUTES, lastPrimedAt), true);
+});
+
+test("does not catch up once a primer already ran at or after the instant", () => {
+  const instant = new Date("2024-01-15T13:30:00Z");
+  const wellPastTolerance = new Date(instant.getTime() + 60 * 60_000);
+  const lastPrimedAt = new Date(instant.getTime() + 60_000);
+  assert.equal(isPrimerDue(WEEKDAY_CONFIG, wellPastTolerance, DEFAULT_DUE_TOLERANCE_MINUTES, lastPrimedAt), false);
+});
+
+test("does not catch up on a future instant even with a stale lastPrimedAt", () => {
+  const instant = new Date("2024-01-15T13:30:00Z");
+  const beforeInstant = new Date(instant.getTime() - 60 * 60_000);
+  const lastPrimedAt = new Date(instant.getTime() - 2 * 24 * 60 * 60_000);
+  assert.equal(isPrimerDue(WEEKDAY_CONFIG, beforeInstant, DEFAULT_DUE_TOLERANCE_MINUTES, lastPrimedAt), false);
 });
 
 test("is false when there are no active weekdays", () => {

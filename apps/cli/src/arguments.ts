@@ -4,7 +4,7 @@ import { PrimeTimeError } from "@primetime/shared";
 export const CLI_USAGE =
   "Usage: primetime prime <provider>\n" +
   "       primetime schedule next <config-path>\n" +
-  "       primetime schedule due <config-path> [--tolerance-minutes <n>]\n" +
+  "       primetime schedule due <config-path> [--tolerance-minutes <n>] [--last-primed-at <iso-timestamp>]\n" +
   "       primetime setup <provider>\n" +
   "       primetime setup github-secrets-pat";
 
@@ -22,6 +22,7 @@ export interface ScheduleDueCommand {
   readonly command: "schedule-due";
   readonly configPath: string;
   readonly toleranceMinutes: number;
+  readonly lastPrimedAt: Date | undefined;
 }
 
 export interface SetupProviderCommand {
@@ -69,21 +70,41 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       throw new CliUsageError();
     }
 
-    if (extraArguments.length === 0) {
-      return { command: "schedule-due", configPath: third, toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES };
-    }
+    let toleranceMinutes = DEFAULT_DUE_TOLERANCE_MINUTES;
+    let lastPrimedAt: Date | undefined;
+    let sawToleranceFlag = false;
+    let sawLastPrimedAtFlag = false;
 
-    const [flag, value, ...rest] = extraArguments;
-    if (flag !== "--tolerance-minutes" || value === undefined || value.trim() === "" || rest.length > 0) {
+    for (let index = 0; index < extraArguments.length; index += 2) {
+      const flag = extraArguments[index];
+      const value = extraArguments[index + 1];
+      if (value === undefined || value.trim() === "") {
+        throw new CliUsageError();
+      }
+
+      if (flag === "--tolerance-minutes" && !sawToleranceFlag) {
+        sawToleranceFlag = true;
+        toleranceMinutes = Number(value);
+        if (!Number.isInteger(toleranceMinutes) || toleranceMinutes <= 0) {
+          throw new CliUsageError();
+        }
+        continue;
+      }
+
+      if (flag === "--last-primed-at" && !sawLastPrimedAtFlag) {
+        sawLastPrimedAtFlag = true;
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+          throw new CliUsageError();
+        }
+        lastPrimedAt = parsed;
+        continue;
+      }
+
       throw new CliUsageError();
     }
 
-    const toleranceMinutes = Number(value);
-    if (!Number.isInteger(toleranceMinutes) || toleranceMinutes <= 0) {
-      throw new CliUsageError();
-    }
-
-    return { command: "schedule-due", configPath: third, toleranceMinutes };
+    return { command: "schedule-due", configPath: third, toleranceMinutes, lastPrimedAt };
   }
 
   if (first === "setup") {

@@ -37,12 +37,20 @@ on:
     # by the "Check whether a primer is due" step below, which is
     # timezone/DST-aware (see `primetime schedule due`). A fixed daytime UTC
     # band can't safely cover every IANA offset, so this cadence
-    # intentionally doesn't try to narrow the window itself.
-    - cron: "*/15 * * * *"
+    # intentionally doesn't try to narrow the window itself. Offset by 7
+    # minutes off the round marks (:00/:15/:30/:45) rather than "*/15",
+    # since GitHub's own docs warn that scheduled runs are most likely to
+    # be delayed right at those marks (see templates/github-actions/README.md).
+    - cron: "7,22,37,52 * * * *"
   workflow_dispatch: {}
 
 permissions:
-  contents: read
+  # "write" (not "read") so the "Persist primer state" step below can commit
+  # .primetime/state-codex.json back to this repo with the default
+  # GITHUB_TOKEN — no extra secret needed, since that file holds only a
+  # timestamp, never credentials. Unrelated to the OIDC/install-token
+  # exchange below, which is scoped to secrets only.
+  contents: write
   # Required so this job can request a GitHub Actions OIDC token proving
   # "I am run X of workflow Y in repo Z" to the PrimeTime backend below.
   id-token: write
@@ -87,6 +95,22 @@ jobs:
           npm ci
           npm run build
 
+      - name: Read last-primed state
+        id: last-primed
+        # .primetime/state-codex.json (written by "Persist primer state"
+        # below) records when Codex was last actually primed. Feeding that
+        # into the due-check step lets it catch up on an instant that a
+        # late or dropped GitHub schedule tick already missed, rather than
+        # silently losing that day's primer. Missing/unreadable is treated
+        # as "never primed", the same as a first-ever run.
+        run: |
+          if [ -f .primetime/state-codex.json ]; then
+            value=$(jq -r '.lastPrimedAt // empty' .primetime/state-codex.json)
+          else
+            value=""
+          fi
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
       - name: Check whether a primer is due
         id: due-check
         # A missing .primetime/schedule.json is a real error (exit 1, not
@@ -94,14 +118,18 @@ jobs:
         # that should surface loudly rather than silently misbehave.
         #
         # --tolerance-minutes 20 (wider than the CLI's own 8-minute default)
-        # gives GitHub's best-effort `schedule` trigger more room to still
-        # catch a primer instant even when a tick lands late — GitHub's own
-        # docs warn that scheduled runs can be delayed under load, and that
-        # is most pronounced right at cron's round marks (:00/:15/:30/:45),
-        # which this cadence uses.
+        # absorbs ordinary lateness; --last-primed-at (see the step above)
+        # additionally catches up on a tick GitHub dropped outright, since
+        # no fixed tolerance can absorb an outage of unpredictable length.
+        env:
+          LAST_PRIMED_AT: ${{ steps.last-primed.outputs.value }}
         run: |
           set +e
-          node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20
+          if [ -n "$LAST_PRIMED_AT" ]; then
+            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20 --last-primed-at "$LAST_PRIMED_AT"
+          else
+            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20
+          fi
           code=$?
           set -e
           if [ "$code" -eq 0 ]; then
@@ -131,6 +159,7 @@ jobs:
           chmod 600 "$HOME/.codex/auth.json"
 
       - name: Run the Codex primer
+        id: run-primer
         if: steps.due-check.outputs.due == 'true'
         run: node primetime/apps/cli/dist/src/bin.js prime codex
 
@@ -167,3 +196,32 @@ jobs:
           fi
 
           GH_TOKEN="$install_token" node primetime/apps/cli/dist/src/bin.js setup codex
+
+      - name: Persist primer state
+        if: steps.due-check.outputs.due == 'true' && steps.run-primer.outcome == 'success'
+        # Records when Codex was actually primed, feeding the "Read
+        # last-primed state" catch-up check above. Uses the default
+        # GITHUB_TOKEN (contents: write, above) rather than the OIDC
+        # install token above, which is scoped to secrets only. Best-effort:
+        # a lost race against a concurrent push (e.g. from the Claude Code
+        # primer workflow's own, separate state file) just means a slightly
+        # higher chance of re-priming on the next tick, never a hard failure.
+        run: |
+          mkdir -p .primetime
+          printf '{"lastPrimedAt":"%s"}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > .primetime/state-codex.json
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .primetime/state-codex.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: record last successful Codex primer run"
+          git fetch origin "$GITHUB_REF_NAME"
+          if ! git rebase "origin/$GITHUB_REF_NAME"; then
+            git rebase --abort
+            echo "::warning::Could not rebase onto the latest $GITHUB_REF_NAME before recording the Codex primer state; skipping this update." >&2
+            exit 0
+          fi
+          if ! git push origin "HEAD:$GITHUB_REF_NAME"; then
+            echo "::warning::Could not push the updated Codex primer state (a concurrent update may have won the race); a future run will retry." >&2
+          fi

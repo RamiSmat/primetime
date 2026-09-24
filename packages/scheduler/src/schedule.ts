@@ -116,11 +116,21 @@ export const DEFAULT_DUE_TOLERANCE_MINUTES = 8;
  * on a fixed, frequent cadence (see `primetime schedule due`) and needs to
  * decide, timezone/DST-aware, whether this particular tick is the one that
  * should actually run the primer.
+ *
+ * When `lastPrimedAt` is given, an already-passed instant is also treated as
+ * due as long as no successful primer has happened since it — a catch-up
+ * for a scheduler (GitHub Actions' `schedule` trigger, notably) whose ticks
+ * are best-effort and can be delayed or dropped for far longer than any
+ * fixed symmetric tolerance could reasonably absorb. Bounded to at most a
+ * one-day lag by only ever considering yesterday/today/tomorrow's instants.
+ * Without `lastPrimedAt`, behavior is unchanged: a missed tolerance window
+ * means that instant is simply never due.
  */
 export function isPrimerDue(
   config: ScheduleConfig,
   now: Date,
   toleranceMinutes: number = DEFAULT_DUE_TOLERANCE_MINUTES,
+  lastPrimedAt?: Date,
 ): boolean {
   if (config.activeWeekdays.length === 0) {
     return false;
@@ -133,6 +143,11 @@ export function isPrimerDue(
     const candidateDate = addCalendarDays(today, dayOffset);
     for (const { instant } of computePrimerInstantsForDate(config, candidateDate)) {
       if (Math.abs(now.getTime() - instant.getTime()) <= toleranceMillis) {
+        return true;
+      }
+      const isPastInstant = instant.getTime() <= now.getTime();
+      const missedByPrimer = lastPrimedAt !== undefined && lastPrimedAt.getTime() < instant.getTime();
+      if (isPastInstant && missedByPrimer) {
         return true;
       }
     }

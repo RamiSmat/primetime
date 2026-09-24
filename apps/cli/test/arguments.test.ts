@@ -49,11 +49,12 @@ test("rejects a schedule next command with extra arguments", () => {
   );
 });
 
-test("parses the schedule due command and config path, defaulting the tolerance", () => {
+test("parses the schedule due command and config path, defaulting the tolerance and last-primed-at", () => {
   assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json"]), {
     command: "schedule-due",
     configPath: "./schedule.json",
     toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES,
+    lastPrimedAt: undefined,
   });
 });
 
@@ -62,7 +63,98 @@ test("parses the schedule due command with an explicit tolerance", () => {
     command: "schedule-due",
     configPath: "./schedule.json",
     toleranceMinutes: 5,
+    lastPrimedAt: undefined,
   });
+});
+
+test("parses the schedule due command with an explicit --last-primed-at", () => {
+  const result = parseCliArguments([
+    "schedule",
+    "due",
+    "./schedule.json",
+    "--last-primed-at",
+    "2024-01-15T13:00:00Z",
+  ]);
+  assert.deepEqual(result, {
+    command: "schedule-due",
+    configPath: "./schedule.json",
+    toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES,
+    lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
+  });
+});
+
+test("parses the schedule due command with both flags, in either order", () => {
+  const withToleranceFirst = parseCliArguments([
+    "schedule",
+    "due",
+    "./schedule.json",
+    "--tolerance-minutes",
+    "5",
+    "--last-primed-at",
+    "2024-01-15T13:00:00Z",
+  ]);
+  assert.deepEqual(withToleranceFirst, {
+    command: "schedule-due",
+    configPath: "./schedule.json",
+    toleranceMinutes: 5,
+    lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
+  });
+
+  const withLastPrimedAtFirst = parseCliArguments([
+    "schedule",
+    "due",
+    "./schedule.json",
+    "--last-primed-at",
+    "2024-01-15T13:00:00Z",
+    "--tolerance-minutes",
+    "5",
+  ]);
+  assert.deepEqual(withLastPrimedAtFirst, {
+    command: "schedule-due",
+    configPath: "./schedule.json",
+    toleranceMinutes: 5,
+    lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
+  });
+});
+
+test("rejects a schedule due command with a malformed --last-primed-at flag", () => {
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--last-primed-at"]),
+    CliUsageError,
+  );
+  assert.throws(
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "--last-primed-at", "not-a-date"]),
+    CliUsageError,
+  );
+});
+
+test("rejects a schedule due command with a repeated flag", () => {
+  assert.throws(
+    () =>
+      parseCliArguments([
+        "schedule",
+        "due",
+        "./schedule.json",
+        "--tolerance-minutes",
+        "5",
+        "--tolerance-minutes",
+        "10",
+      ]),
+    CliUsageError,
+  );
+  assert.throws(
+    () =>
+      parseCliArguments([
+        "schedule",
+        "due",
+        "./schedule.json",
+        "--last-primed-at",
+        "2024-01-15T13:00:00Z",
+        "--last-primed-at",
+        "2024-01-15T14:00:00Z",
+      ]),
+    CliUsageError,
+  );
 });
 
 test("rejects a schedule due command missing a config path", () => {

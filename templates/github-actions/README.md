@@ -11,42 +11,65 @@ shifts or (once dead-time windows are configured) more than one trigger time
 per day, so none of these templates try to compute a single precise `cron:`
 line. Instead, each one:
 
-1. Triggers on a tight, fixed cadence (`cron: "*/15 * * * *"` — every 15
-   minutes, all day, every day) that intentionally doesn't try to narrow
-   itself to any particular time-zone band.
+1. Triggers on a tight, fixed cadence every 15 minutes, all day, every day,
+   offset away from cron's round marks (`cron: "7,22,37,52 * * * *"` rather
+   than `"*/15 * * * *"` — see the reliability note below for why) — this
+   intentionally doesn't try to narrow itself to any particular time-zone
+   band.
 2. Checks out the repository the workflow itself lives in (in addition to
    PrimeTime's own source, checked out separately for building the CLI) so
    it has access to a `.primetime/schedule.json` file at the repo root —
    added by the PrimeTime dashboard's "Create my warmup repository" setup
    command, alongside the workflow file itself.
-3. Runs `primetime schedule due .primetime/schedule.json` as its first real
-   step. This is the timezone/DST-aware decision point: it exits `0` when a
-   primer is actually due right now, `2` when it isn't (an expected,
-   non-error outcome), or `1` for a real error (e.g. a missing or invalid
-   config file — this surfaces loudly rather than silently skipping or
-   always running).
-4. Gates every subsequent step on that step's `due` output, so a "not due"
+3. Reads that provider's own `.primetime/state-<provider>.json` (e.g.
+   `state-codex.json`), if one exists from a prior run, for its
+   `lastPrimedAt` timestamp — see the reliability note below.
+4. Runs `primetime schedule due .primetime/schedule.json --tolerance-minutes
+   20 [--last-primed-at <timestamp>]` as its first real step. This is the
+   timezone/DST-aware decision point: it exits `0` when a primer is actually
+   due right now, `2` when it isn't (an expected, non-error outcome), or `1`
+   for a real error (e.g. a missing or invalid config file — this surfaces
+   loudly rather than silently skipping or always running).
+5. Gates every subsequent step on that step's `due` output, so a "not due"
    tick costs one cheap CLI invocation and skips the rest of the job.
+6. On a successful primer, writes the current timestamp to
+   `.primetime/state-<provider>.json` and commits it back to the repo with
+   the default `GITHUB_TOKEN` (each template's `permissions.contents` is
+   `write` for exactly this; each provider gets its own state file so one
+   provider's primer can never make another provider's due-check think it's
+   already been served).
 
 If `.primetime/schedule.json` is missing, the due-check step fails the job
 (exit `1`) rather than guessing — that almost always means the warmup
 repo's setup command hasn't finished, and should be visible in the Actions
 tab rather than silently never priming (or always priming).
 
-**GitHub's `schedule` trigger is best-effort, not guaranteed.** GitHub's own
-docs warn that scheduled workflow runs can be delayed during periods of high
-load — most pronounced right at cron's round marks (`:00`/`:15`/`:30`/`:45`,
-which this cadence uses) — and in practice a run can be skipped outright for
-hours at a time, not just delayed by a few minutes. Since each schedule
+**GitHub's `schedule` trigger is best-effort, not guaranteed — and this
+project has observed it dropping ticks for hours at a time**, not just
+delaying them by a few minutes. GitHub's own docs only officially warn about
+delay, concentrated right at cron's round marks (`:00`/`:15`/`:30`/`:45`), so
+all three templates fire off those marks instead. But since each schedule
 config only produces one narrow due-instant per event (work-start, or each
-dead-time window's end), a single dropped tick during that window means the
-whole day's primer for that event silently doesn't run — nothing fails, the
-job just has nothing to do that tick. All three templates pass
-`--tolerance-minutes 20` (wider than the CLI's own 8-minute default) to
-`schedule due` to absorb ordinary lateness, but this cannot help when GitHub
-drops ticks for longer than that. If primers are missing more often than
-expected, check the workflow's Actions run history for gaps of more than
-~20-30 minutes around the expected instant before assuming a config problem.
+dead-time window's end), a single dropped tick during that window — however
+briefly GitHub's own docs suggest that should be possible — would otherwise
+mean the whole day's primer for that event silently doesn't run, with
+nothing in the Actions log to say so. Two independent layers guard against
+that:
+
+- `--tolerance-minutes 20` (wider than the CLI's own 8-minute default)
+  widens the window a single tick has to land in.
+- `--last-primed-at`, fed from each provider's persisted state file (steps 3
+  and 6 above), gives every later tick the same day an unbounded catch-up
+  window: as long as no primer has succeeded since the missed instant, the
+  very next tick that does fire — even hours late — still runs it. This is
+  what actually closes the gap a fixed tolerance can't: it doesn't matter
+  how long GitHub's scheduler stays silent, only that it eventually sends
+  one more tick before the next instant is due.
+
+If primers are still missing after this, check the workflow's Actions run
+history for gaps of many hours with no runs at all — that points at GitHub's
+scheduler itself outright refusing to trigger the workflow, which no amount
+of due-check tuning inside the job can work around.
 
 ## `codex-prime.yml`
 
