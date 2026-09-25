@@ -37,6 +37,14 @@ import { withEphemeralWorkspace } from "./workspace.js";
 
 const CODEX_AUTH_SECRET_NAME = "CODEX_AUTH_JSON";
 
+/**
+ * ASSUMPTION, verify before merging: OpenAI's ChatGPT-plan usage limits for
+ * the Codex CLI reset on a rolling 5-hour window. Check OpenAI's current
+ * Codex CLI / ChatGPT plan rate-limit docs before relying on this — limit
+ * structures change independently of when this constant was written.
+ */
+const CODEX_USAGE_WINDOW_MINUTES = 5 * 60;
+
 export class ProviderOperationNotImplementedError extends PrimeTimeError {
   public constructor(providerName: string, operation: ProviderOperation) {
     super(
@@ -55,6 +63,7 @@ const MAX_OUTPUT_BYTES = 64 * 1024;
 export class CodexProvider implements ProviderAdapter {
   public readonly id = "codex";
   public readonly name = "Codex";
+  public readonly usageWindowMinutes = CODEX_USAGE_WINDOW_MINUTES;
 
   public constructor(
     private readonly runner: SubprocessRunner = defaultSubprocessRunner,

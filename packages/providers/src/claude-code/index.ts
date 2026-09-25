@@ -36,6 +36,14 @@ import { withEphemeralWorkspace } from "./workspace.js";
 
 const CLAUDE_CODE_OAUTH_TOKEN_SECRET_NAME = "CLAUDE_CODE_OAUTH_TOKEN";
 
+/**
+ * ASSUMPTION, verify before merging: Anthropic's Claude Pro/Max session
+ * usage limits (claude.ai / Claude Code) reset on a rolling 5-hour window.
+ * Check Anthropic's current usage-limits docs before relying on this —
+ * limit structures change independently of when this constant was written.
+ */
+const CLAUDE_CODE_USAGE_WINDOW_MINUTES = 5 * 60;
+
 const VERSION_TIMEOUT_MS = 5_000;
 const AUTH_STATUS_TIMEOUT_MS = 10_000;
 const PRIMER_TIMEOUT_MS = 60_000;
@@ -44,6 +52,7 @@ const MAX_OUTPUT_BYTES = 64 * 1024;
 export class ClaudeCodeProvider implements ProviderAdapter {
   public readonly id = "claude-code";
   public readonly name = "Claude Code";
+  public readonly usageWindowMinutes = CLAUDE_CODE_USAGE_WINDOW_MINUTES;
 
   public constructor(
     private readonly runner: SubprocessRunner = defaultSubprocessRunner,
