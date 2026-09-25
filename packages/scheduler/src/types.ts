@@ -34,16 +34,26 @@ export interface ScheduleConfig {
   readonly timeZone: string;
   /** 24-hour local wall-clock time, "HH:MM", when work normally starts. */
   readonly workStartTime: string;
-  /** Minutes before workStartTime the primer should run. */
+  /**
+   * A small safety-margin buffer, in minutes, applied before each moment
+   * primer coverage first becomes needed: before `workStartTime` for the
+   * day's first active stretch, and before the start of whichever
+   * dead-time window immediately precedes a later stretch (never earlier
+   * than that window's own start). Independent of how long a provider's
+   * usage window actually stays warm -- see
+   * `@primetime/scheduler#computePrimerInstantsForDate`'s `usageWindowMinutes`
+   * parameter for that.
+   */
   readonly leadTimeMinutes: number;
   /** Weekdays, local to timeZone, on which work normally starts. */
   readonly activeWeekdays: readonly Weekday[];
   /**
    * Recurring daily periods (lunch, meetings, evenings, ...) when the user
-   * isn't using AI agents. A primer also runs `leadTimeMinutes` before each
-   * window's `endTime`, re-warming the session ahead of when work resumes.
-   * Non-overlapping. Defaults to `[]` (single work-start primer per day,
-   * matching pre-dead-time-window behavior).
+   * isn't using AI agents. Primer instants are never placed inside a
+   * dead-time window; the active stretch that follows one is instead
+   * re-warmed starting at (or, for a short window, right at) that window's
+   * end -- see `computePrimerInstantsForDate` for exactly how. Non-overlapping.
+   * Defaults to `[]` (a single active stretch spanning the whole day).
    */
   readonly deadTimeWindows: readonly DeadTimeWindow[];
 }
