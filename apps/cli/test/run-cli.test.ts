@@ -43,7 +43,7 @@ async function withTempConfigFile(
 test("schedule next reports the next primer run as an ISO instant", async () => {
   await withTempConfigFile(JSON.stringify(VALID_CONFIG), async (filePath) => {
     const io = fakeIo();
-    const exitCode = await runCli(["schedule", "next", filePath], io);
+    const exitCode = await runCli(["schedule", "next", filePath, "codex"], io);
 
     assert.equal(exitCode, 0);
     assert.equal(io.errors.length, 0);
@@ -55,7 +55,7 @@ test("schedule next reports the next primer run as an ISO instant", async () => 
 test("schedule next reports a clear error and exit code 1 for a missing config file", async () => {
   const io = fakeIo();
   const exitCode = await runCli(
-    ["schedule", "next", join(tmpdir(), "primetime-missing-dir", "schedule.json")],
+    ["schedule", "next", join(tmpdir(), "primetime-missing-dir", "schedule.json"), "codex"],
     io,
   );
 
@@ -63,6 +63,17 @@ test("schedule next reports a clear error and exit code 1 for a missing config f
   assert.equal(io.output.length, 0);
   assert.equal(io.errors.length, 1);
   assert.match(io.errors[0]!, /could not be read/);
+});
+
+test("schedule next reports a clear error and exit code 1 for an unknown provider", async () => {
+  await withTempConfigFile(JSON.stringify(VALID_CONFIG), async (filePath) => {
+    const io = fakeIo();
+    const exitCode = await runCli(["schedule", "next", filePath, "not-a-real-provider"], io);
+
+    assert.equal(exitCode, 1);
+    assert.equal(io.output.length, 0);
+    assert.equal(io.errors.length, 1);
+  });
 });
 
 test("setup github-secrets-pat reports a clear error for empty stdin, without calling gh", async () => {
@@ -79,7 +90,7 @@ test("schedule next reports a clear error for an invalid schedule", async () => 
     JSON.stringify({ ...VALID_CONFIG, activeWeekdays: [] }),
     async (filePath) => {
       const io = fakeIo();
-      const exitCode = await runCli(["schedule", "next", filePath], io);
+      const exitCode = await runCli(["schedule", "next", filePath, "codex"], io);
 
       assert.equal(exitCode, 1);
       assert.equal(io.output.length, 0);
@@ -108,7 +119,7 @@ test("schedule due exits 0 and reports due when now is within tolerance of a pri
   };
   await withTempConfigFile(JSON.stringify(config), async (filePath) => {
     const io = fakeIo();
-    const exitCode = await runCli(["schedule", "due", filePath, "--tolerance-minutes", "2"], io);
+    const exitCode = await runCli(["schedule", "due", filePath, "codex", "--tolerance-minutes", "2"], io);
 
     assert.equal(exitCode, 0);
     assert.equal(io.errors.length, 0);
@@ -138,7 +149,7 @@ test("schedule due exits 2 and reports not due when no active weekday falls near
   };
   await withTempConfigFile(JSON.stringify(config), async (filePath) => {
     const io = fakeIo();
-    const exitCode = await runCli(["schedule", "due", filePath], io);
+    const exitCode = await runCli(["schedule", "due", filePath, "codex"], io);
 
     assert.equal(exitCode, 2);
     assert.equal(io.errors.length, 0);
@@ -162,14 +173,14 @@ test("schedule due catches up on a missed instant when --last-primed-at predates
   };
   await withTempConfigFile(JSON.stringify(config), async (filePath) => {
     const notCaughtUp = fakeIo();
-    const notCaughtUpExitCode = await runCli(["schedule", "due", filePath], notCaughtUp);
+    const notCaughtUpExitCode = await runCli(["schedule", "due", filePath, "codex"], notCaughtUp);
     assert.equal(notCaughtUpExitCode, 2);
     assert.match(notCaughtUp.output[0]!, /^Primer is not due/);
 
     const caughtUp = fakeIo();
     const lastPrimedAt = new Date(missedInstant.getTime() - 60_000).toISOString();
     const caughtUpExitCode = await runCli(
-      ["schedule", "due", filePath, "--last-primed-at", lastPrimedAt],
+      ["schedule", "due", filePath, "codex", "--last-primed-at", lastPrimedAt],
       caughtUp,
     );
     assert.equal(caughtUpExitCode, 0);
@@ -183,11 +194,22 @@ test("schedule due reports a clear error and exit code 1 for an invalid schedule
     JSON.stringify({ ...VALID_CONFIG, activeWeekdays: [] }),
     async (filePath) => {
       const io = fakeIo();
-      const exitCode = await runCli(["schedule", "due", filePath], io);
+      const exitCode = await runCli(["schedule", "due", filePath, "codex"], io);
 
       assert.equal(exitCode, 1);
       assert.equal(io.output.length, 0);
       assert.match(io.errors[0]!, /Invalid schedule configuration/);
     },
   );
+});
+
+test("schedule due reports a clear error and exit code 1 for an unknown provider", async () => {
+  await withTempConfigFile(JSON.stringify(VALID_CONFIG), async (filePath) => {
+    const io = fakeIo();
+    const exitCode = await runCli(["schedule", "due", filePath, "not-a-real-provider"], io);
+
+    assert.equal(exitCode, 1);
+    assert.equal(io.output.length, 0);
+    assert.equal(io.errors.length, 1);
+  });
 });
