@@ -15,6 +15,7 @@ export {
   computePrimerInstantsForDate,
   DEFAULT_DUE_TOLERANCE_MINUTES,
   isPrimerDue,
+  LeadTimeExceedsUsageWindowError,
   NoActivePrimerWindowError,
 } from "./schedule.js";
 
