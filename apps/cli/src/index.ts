@@ -37,15 +37,23 @@ export async function runCli(
     }
 
     if (command.command === "schedule-next") {
+      const provider = selectProvider(command.provider);
       const config = await readScheduleConfigFile(command.configPath);
-      const nextRun = computeNextPrimerRun(config, new Date());
+      const nextRun = computeNextPrimerRun(config, new Date(), provider.usageWindowMinutes);
       io.writeOutput(`Next primer run: ${nextRun.toISOString()}`);
       return 0;
     }
 
     if (command.command === "schedule-due") {
+      const provider = selectProvider(command.provider);
       const config = await readScheduleConfigFile(command.configPath);
-      const due = isPrimerDue(config, new Date(), command.toleranceMinutes, command.lastPrimedAt);
+      const due = isPrimerDue(
+        config,
+        new Date(),
+        provider.usageWindowMinutes,
+        command.toleranceMinutes,
+        command.lastPrimedAt,
+      );
 
       if (due) {
         io.writeOutput(`Primer is due (tolerance ${command.toleranceMinutes}m).`);
