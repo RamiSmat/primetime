@@ -107,9 +107,9 @@ jobs:
         run: |
           set +e
           if [ -n "$LAST_PRIMED_AT" ]; then
-            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20 --last-primed-at "$LAST_PRIMED_AT"
+            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json codex --tolerance-minutes 20 --last-primed-at "$LAST_PRIMED_AT"
           else
-            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json --tolerance-minutes 20
+            node primetime/apps/cli/dist/src/bin.js schedule due .primetime/schedule.json codex --tolerance-minutes 20
           fi
           code=$?
           set -e
