@@ -24,9 +24,9 @@ line. Instead, each one:
 3. Reads that provider's own `.primetime/state-<provider>.json` (e.g.
    `state-codex.json`), if one exists from a prior run, for its
    `lastPrimedAt` timestamp — see the reliability note below.
-4. Runs `primetime schedule due .primetime/schedule.json --tolerance-minutes
-   20 [--last-primed-at <timestamp>]` as its first real step. This is the
-   timezone/DST-aware decision point: it exits `0` when a primer is actually
+4. Runs `primetime schedule due .primetime/schedule.json <provider>
+   --tolerance-minutes 20 [--last-primed-at <timestamp>]` as its first real
+   step. This is the timezone/DST-aware decision point: it exits `0` when a primer is actually
    due right now, `2` when it isn't (an expected, non-error outcome), or `1`
    for a real error (e.g. a missing or invalid config file — this surfaces
    loudly rather than silently skipping or always running).
