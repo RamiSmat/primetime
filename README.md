@@ -14,9 +14,9 @@ infrastructure and must never pass through a PrimeTime backend.
 
 This repository currently contains a minimal TypeScript monorepo with:
 
-- a `primetime prime <provider>`, `primetime schedule next <config-path>`,
-  `primetime setup <provider>`, and `primetime setup github-secrets-pat`
-  CLI;
+- a `primetime prime <provider>`, `primetime schedule next <config-path>
+  <provider>`, `primetime setup <provider>`, and
+  `primetime setup github-secrets-pat` CLI;
 - a provider adapter contract, with real Codex and Claude Code adapters
   (each including a real `setup()` that transfers a local session/token to
   a GitHub Actions secret) and a placeholder interface for future
@@ -306,38 +306,51 @@ import { computeNextPrimerRun, parseScheduleConfig } from "@primetime/scheduler"
 const config = parseScheduleConfig({
   timeZone: "America/New_York",
   workStartTime: "09:00",
+  // A small safety-margin buffer, independent of any provider's usage-window
+  // length -- see usageWindowMinutes below.
   leadTimeMinutes: 30,
   activeWeekdays: ["monday", "tuesday", "wednesday", "thursday", "friday"],
-  // Optional: recurring daily gaps (lunch, standing meetings, ...) that
-  // get their own re-prime instant right before they end. Defaults to [].
+  // Optional: recurring daily gaps (lunch, standing meetings, ...). The
+  // active stretch following one is re-warmed starting at (or right at) its
+  // end. Defaults to [].
   deadTimeWindows: [{ startTime: "12:00", endTime: "13:00" }],
 });
 
-computeNextPrimerRun(config, new Date());
+// How long the provider's usage window stays warm after a primer -- see
+// ProviderAdapter.usageWindowMinutes (@primetime/providers), currently a
+// hardcoded 5h (300) for both Codex and Claude Code.
+const usageWindowMinutes = 300;
+
+computeNextPrimerRun(config, new Date(), usageWindowMinutes);
 ```
 
 `computeNextPrimerRun` returns the next absolute instant, strictly after
-`now`, that is either `leadTimeMinutes` before `workStartTime`, or
-`leadTimeMinutes` before the end of a `deadTimeWindows` entry, local to
-`timeZone`, on the next date whose local weekday is in `activeWeekdays`.
-It uses the JavaScript `Intl` API (no date library dependency) to convert
-local wall-clock time to UTC, so it accounts for daylight-saving
+`now`, at which the provider's usage window needs re-warming: the first
+instant of each active stretch of the day (`leadTimeMinutes` before
+`workStartTime`, or before the start of whichever `deadTimeWindows` entry
+precedes it, never earlier than that window's own start), plus additional
+rolling-refresh instants spaced `usageWindowMinutes - leadTimeMinutes`
+apart for any stretch longer than the usage window itself — so a long
+workday without breaks still gets re-primed periodically instead of just
+once. It uses the JavaScript `Intl` API (no date library dependency) to
+convert local wall-clock time to UTC, so it accounts for daylight-saving
 transitions correctly on either side of the change. `parseScheduleConfig`
 validates an untrusted input object (including that dead-time windows are
 well-formed and don't overlap) and throws a descriptive
 `InvalidScheduleConfigError` for anything malformed, rather than silently
 falling back to a default.
 
-The CLI exposes this through `primetime schedule next <config-path>`,
-which reads a JSON file in the shape above and prints the next primer run
-as an ISO instant:
+The CLI exposes this through `primetime schedule next <config-path>
+<provider>`, which reads a JSON file in the shape above, looks up that
+provider's `usageWindowMinutes`, and prints the next primer run as an ISO
+instant:
 
 ```sh
-node apps/cli/dist/src/bin.js schedule next ./schedule.json
+node apps/cli/dist/src/bin.js schedule next ./schedule.json claude-code
 # Next primer run: 2024-01-16T13:30:00.000Z
 ```
 
-A second command, `primetime schedule due <config-path>
+A second command, `primetime schedule due <config-path> <provider>
 [--tolerance-minutes <n>] [--last-primed-at <iso-timestamp>]`, is the
 actual decision point a scheduled GitHub Actions workflow polls on a
 frequent, fixed cron cadence, since GitHub Actions' `schedule.cron` is
@@ -349,7 +362,9 @@ a persisted state file, lets it additionally catch up on an instant that a
 dropped or delayed GitHub schedule tick already missed, as long as no
 primer has succeeded since — see
 [`templates/github-actions/README.md`](templates/github-actions/README.md)
-for the full mechanism and why a fixed tolerance alone isn't enough.
+for the full mechanism and why a fixed tolerance alone isn't enough. The
+`<provider>` argument determines which `usageWindowMinutes` value is used,
+since different providers can have different usage-window lengths.
 
 This is exactly what the GitHub Actions workflow templates described
 above (Codex and Claude Code, self-hosted and hosted) build on — see
