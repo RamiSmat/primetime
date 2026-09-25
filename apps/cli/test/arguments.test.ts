@@ -24,10 +24,11 @@ test("rejects unsupported command shapes", () => {
   assert.throws(() => parseCliArguments(["nonsense"]), CliUsageError);
 });
 
-test("parses the schedule next command and config path", () => {
-  assert.deepEqual(parseCliArguments(["schedule", "next", "./schedule.json"]), {
+test("parses the schedule next command, config path, and provider", () => {
+  assert.deepEqual(parseCliArguments(["schedule", "next", "./schedule.json", "codex"]), {
     command: "schedule-next",
     configPath: "./schedule.json",
+    provider: "codex",
   });
 });
 
@@ -35,36 +36,49 @@ test("rejects a schedule next command missing a config path", () => {
   assert.throws(() => parseCliArguments(["schedule", "next"]), CliUsageError);
 });
 
+test("rejects a schedule next command missing a provider", () => {
+  assert.throws(() => parseCliArguments(["schedule", "next", "./schedule.json"]), CliUsageError);
+});
+
 test("rejects an unsupported schedule subcommand", () => {
   assert.throws(
-    () => parseCliArguments(["schedule", "later", "./schedule.json"]),
+    () => parseCliArguments(["schedule", "later", "./schedule.json", "codex"]),
     CliUsageError,
   );
 });
 
 test("rejects a schedule next command with extra arguments", () => {
   assert.throws(
-    () => parseCliArguments(["schedule", "next", "./schedule.json", "extra"]),
+    () => parseCliArguments(["schedule", "next", "./schedule.json", "codex", "extra"]),
     CliUsageError,
   );
 });
 
-test("parses the schedule due command and config path, defaulting the tolerance and last-primed-at", () => {
-  assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json"]), {
+test("parses the schedule due command, config path, and provider, defaulting the tolerance and last-primed-at", () => {
+  assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json", "codex"]), {
     command: "schedule-due",
     configPath: "./schedule.json",
+    provider: "codex",
     toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES,
     lastPrimedAt: undefined,
   });
 });
 
+test("rejects a schedule due command missing a provider", () => {
+  assert.throws(() => parseCliArguments(["schedule", "due", "./schedule.json"]), CliUsageError);
+});
+
 test("parses the schedule due command with an explicit tolerance", () => {
-  assert.deepEqual(parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "5"]), {
-    command: "schedule-due",
-    configPath: "./schedule.json",
-    toleranceMinutes: 5,
-    lastPrimedAt: undefined,
-  });
+  assert.deepEqual(
+    parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes", "5"]),
+    {
+      command: "schedule-due",
+      configPath: "./schedule.json",
+      provider: "codex",
+      toleranceMinutes: 5,
+      lastPrimedAt: undefined,
+    },
+  );
 });
 
 test("parses the schedule due command with an explicit --last-primed-at", () => {
@@ -72,12 +86,14 @@ test("parses the schedule due command with an explicit --last-primed-at", () => 
     "schedule",
     "due",
     "./schedule.json",
+    "codex",
     "--last-primed-at",
     "2024-01-15T13:00:00Z",
   ]);
   assert.deepEqual(result, {
     command: "schedule-due",
     configPath: "./schedule.json",
+    provider: "codex",
     toleranceMinutes: DEFAULT_DUE_TOLERANCE_MINUTES,
     lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
   });
@@ -88,6 +104,7 @@ test("parses the schedule due command with both flags, in either order", () => {
     "schedule",
     "due",
     "./schedule.json",
+    "codex",
     "--tolerance-minutes",
     "5",
     "--last-primed-at",
@@ -96,6 +113,7 @@ test("parses the schedule due command with both flags, in either order", () => {
   assert.deepEqual(withToleranceFirst, {
     command: "schedule-due",
     configPath: "./schedule.json",
+    provider: "codex",
     toleranceMinutes: 5,
     lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
   });
@@ -104,6 +122,7 @@ test("parses the schedule due command with both flags, in either order", () => {
     "schedule",
     "due",
     "./schedule.json",
+    "codex",
     "--last-primed-at",
     "2024-01-15T13:00:00Z",
     "--tolerance-minutes",
@@ -112,6 +131,7 @@ test("parses the schedule due command with both flags, in either order", () => {
   assert.deepEqual(withLastPrimedAtFirst, {
     command: "schedule-due",
     configPath: "./schedule.json",
+    provider: "codex",
     toleranceMinutes: 5,
     lastPrimedAt: new Date("2024-01-15T13:00:00Z"),
   });
@@ -119,11 +139,12 @@ test("parses the schedule due command with both flags, in either order", () => {
 
 test("rejects a schedule due command with a malformed --last-primed-at flag", () => {
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--last-primed-at"]),
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--last-primed-at"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--last-primed-at", "not-a-date"]),
+    () =>
+      parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--last-primed-at", "not-a-date"]),
     CliUsageError,
   );
 });
@@ -135,6 +156,7 @@ test("rejects a schedule due command with a repeated flag", () => {
         "schedule",
         "due",
         "./schedule.json",
+        "codex",
         "--tolerance-minutes",
         "5",
         "--tolerance-minutes",
@@ -148,6 +170,7 @@ test("rejects a schedule due command with a repeated flag", () => {
         "schedule",
         "due",
         "./schedule.json",
+        "codex",
         "--last-primed-at",
         "2024-01-15T13:00:00Z",
         "--last-primed-at",
@@ -163,27 +186,29 @@ test("rejects a schedule due command missing a config path", () => {
 
 test("rejects a schedule due command with a malformed --tolerance-minutes flag", () => {
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes"]),
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "not-a-number"]),
+    () =>
+      parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes", "not-a-number"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "0"]),
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes", "0"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "-5"]),
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes", "-5"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--wrong-flag", "5"]),
+    () => parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--wrong-flag", "5"]),
     CliUsageError,
   );
   assert.throws(
-    () => parseCliArguments(["schedule", "due", "./schedule.json", "--tolerance-minutes", "5", "extra"]),
+    () =>
+      parseCliArguments(["schedule", "due", "./schedule.json", "codex", "--tolerance-minutes", "5", "extra"]),
     CliUsageError,
   );
 });

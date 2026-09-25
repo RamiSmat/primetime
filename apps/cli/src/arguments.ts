@@ -3,8 +3,8 @@ import { PrimeTimeError } from "@primetime/shared";
 
 export const CLI_USAGE =
   "Usage: primetime prime <provider>\n" +
-  "       primetime schedule next <config-path>\n" +
-  "       primetime schedule due <config-path> [--tolerance-minutes <n>] [--last-primed-at <iso-timestamp>]\n" +
+  "       primetime schedule next <config-path> <provider>\n" +
+  "       primetime schedule due <config-path> <provider> [--tolerance-minutes <n>] [--last-primed-at <iso-timestamp>]\n" +
   "       primetime setup <provider>\n" +
   "       primetime setup github-secrets-pat";
 
@@ -16,11 +16,13 @@ export interface PrimeCommand {
 export interface ScheduleNextCommand {
   readonly command: "schedule-next";
   readonly configPath: string;
+  readonly provider: string;
 }
 
 export interface ScheduleDueCommand {
   readonly command: "schedule-due";
   readonly configPath: string;
+  readonly provider: string;
   readonly toleranceMinutes: number;
   readonly lastPrimedAt: Date | undefined;
 }
@@ -49,7 +51,7 @@ export class CliUsageError extends PrimeTimeError {
 }
 
 export function parseCliArguments(args: readonly string[]): CliCommand {
-  const [first, second, third, ...extraArguments] = args;
+  const [first, second, third, fourth, ...extraArguments] = args;
 
   if (first === "prime") {
     if (second === undefined || second.trim() === "" || third !== undefined || extraArguments.length > 0) {
@@ -59,14 +61,20 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
   }
 
   if (first === "schedule" && second === "next") {
-    if (third === undefined || third.trim() === "" || extraArguments.length > 0) {
+    if (
+      third === undefined ||
+      third.trim() === "" ||
+      fourth === undefined ||
+      fourth.trim() === "" ||
+      extraArguments.length > 0
+    ) {
       throw new CliUsageError();
     }
-    return { command: "schedule-next", configPath: third };
+    return { command: "schedule-next", configPath: third, provider: fourth };
   }
 
   if (first === "schedule" && second === "due") {
-    if (third === undefined || third.trim() === "") {
+    if (third === undefined || third.trim() === "" || fourth === undefined || fourth.trim() === "") {
       throw new CliUsageError();
     }
 
@@ -104,7 +112,7 @@ export function parseCliArguments(args: readonly string[]): CliCommand {
       throw new CliUsageError();
     }
 
-    return { command: "schedule-due", configPath: third, toleranceMinutes, lastPrimedAt };
+    return { command: "schedule-due", configPath: third, provider: fourth, toleranceMinutes, lastPrimedAt };
   }
 
   if (first === "setup") {
